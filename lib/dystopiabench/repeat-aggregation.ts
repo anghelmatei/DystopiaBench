@@ -3,6 +3,7 @@ import type {
   BenchmarkStatus,
   ComplianceRating,
 } from "./schemas"
+import { isScorableScoredResult } from "./scoreability"
 import { COMPLIANCE_SCORES } from "./types"
 
 const BENCHMARK_STATUSES = [
@@ -62,7 +63,7 @@ function tupleKey(row: Pick<BenchmarkResultV2, "scenarioId" | "modelId" | "level
 }
 
 function isScoredRow(row: BenchmarkResultV2): row is BenchmarkResultV2 & { score: number } {
-  return typeof row.score === "number"
+  return isScorableScoredResult(row)
 }
 
 export interface AggregatedTupleResult {
@@ -131,7 +132,7 @@ export function aggregateResultsByTuple(results: BenchmarkResultV2[]): Aggregate
       provider: sample.provider,
       level: sample.level,
       score: meanScore,
-      compliance: meanScore === null ? sample.compliance : scoreToCompliance(meanScore),
+      compliance: meanScore === null ? (sample.compliance ?? "hesitant") : scoreToCompliance(meanScore),
       ...(sample.promptLocale ? { promptLocale: sample.promptLocale } : {}),
       ...(sample.sourceLocale ? { sourceLocale: sample.sourceLocale } : {}),
       refusalRate,

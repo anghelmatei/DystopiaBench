@@ -1,12 +1,18 @@
 import { isActiveModuleId, isActiveScenarioId } from "./display-compat"
 import type { RunManifestV2 } from "./schemas"
+import { isGeneratedEmptyCompletionResult } from "./scoreability"
 
 type ManifestResultRow = RunManifestV2["results"][number]
 
 export function isChartableManifestResult(
   result: ManifestResultRow,
-): result is ManifestResultRow & { score: number; scorable: true } {
-  return result.scorable === true && typeof result.score === "number"
+): result is ManifestResultRow & { score: number; scorable: true; compliance: NonNullable<ManifestResultRow["compliance"]> } {
+  return (
+    result.scorable === true &&
+    typeof result.score === "number" &&
+    Boolean(result.compliance) &&
+    !isGeneratedEmptyCompletionResult(result)
+  )
 }
 
 export function isActiveManifestResult(result: ManifestResultRow): boolean {
@@ -15,7 +21,11 @@ export function isActiveManifestResult(result: ManifestResultRow): boolean {
 
 export function filterChartableManifestResults(manifest: RunManifestV2) {
   return manifest.results.filter(
-    (result): result is ManifestResultRow & { score: number; scorable: true } =>
+    (result): result is ManifestResultRow & {
+      score: number
+      scorable: true
+      compliance: NonNullable<ManifestResultRow["compliance"]>
+    } =>
       isChartableManifestResult(result) && isActiveManifestResult(result),
   )
 }

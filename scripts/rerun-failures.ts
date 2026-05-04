@@ -24,30 +24,20 @@ import {
 } from "../lib/dystopiabench/storage"
 import { buildScenarioSelectionMetadata } from "../lib/dystopiabench/scenario-manifest"
 import { SCENARIO_CATALOG_VERSION } from "../lib/dystopiabench/scenarios"
-import { toModuleId, type Module } from "../lib/dystopiabench/types"
+import { toModuleId } from "../lib/dystopiabench/types"
 import { getModelById } from "../lib/dystopiabench/models"
 import { parseModelIdentifier } from "../lib/dystopiabench/model-selectors"
+import {
+  buildPlan,
+  buildStatefulPrefixRows,
+  isFailedRow,
+  resultKey,
+  type EscalationLevel,
+  type PlanFilters,
+  type RerunScope,
+} from "../lib/dystopiabench/rerun-planning"
 
 type RerunSource = "latest" | "run"
-type RerunScope = "from-first-failed" | "to-max-failed" | "all-levels" | "failed-only"
-type EscalationLevel = 1 | 2 | 3 | 4 | 5
-
-interface FailedPairPlan {
-  scenarioId: string
-  modelId: string
-  replicate: number
-  module: Module
-  failedLevels: EscalationLevel[]
-  rerunLevels: EscalationLevel[]
-}
-
-interface PlanFilters {
-  includeModelIds?: Set<string>
-  excludeModelIds?: Set<string>
-  maxPairs?: number
-}
-
-const ALL_LEVELS: EscalationLevel[] = [1, 2, 3, 4, 5]
 
 function parseArg(flag: string): string | undefined {
   const prefix = `${flag}=`
@@ -258,65 +248,6 @@ function parseRuntimeOverrides(): Pick<
   }
 }
 
-function resultKey(row: Pick<BenchmarkResultV2, "scenarioId" | "modelId" | "level" | "replicate" | "sampleId">): string {
-  return row.sampleId ?? `${row.scenarioId}::${row.modelId}::${row.level}::r${row.replicate ?? 1}`
-}
-
-function pairKey(row: Pick<BenchmarkResultV2, "scenarioId" | "modelId" | "replicate">): string {
-  return `${row.scenarioId}::${row.modelId}::r${row.replicate ?? 1}`
-}
-
-function isFailedRow(row: BenchmarkResultV2): boolean {
-  return row.scorable !== true
-}
-
-function toSortedLevels(levels: Iterable<number>): EscalationLevel[] {
-  const deduped = Array.from(new Set(levels))
-    .filter((value): value is EscalationLevel => Number.isInteger(value) && value >= 1 && value <= 5)
-    .sort((a, b) => a - b)
-  return deduped
-}
-
-function buildRerunLevels(scope: RerunScope, failedLevels: EscalationLevel[]): EscalationLevel[] {
-  if (scope === "all-levels") return [...ALL_LEVELS]
-  if (scope === "failed-only") return [...failedLevels]
-  if (scope === "from-first-failed") {
-    const firstFailed = Math.min(...failedLevels)
-    return ALL_LEVELS.filter((level) => level >= firstFailed)
-  }
-  const maxFailed = Math.max(...failedLevels)
-  return ALL_LEVELS.filter((level) => level <= maxFailed)
-}
-
-function buildStatefulPrefixRows(manifest: RunManifestV2, plan: FailedPairPlan): BenchmarkResultV2[] {
-  const firstRerunLevel = Math.min(...plan.rerunLevels)
-  if (firstRerunLevel <= 1) return []
-
-  const rowsByLevel = new Map<EscalationLevel, BenchmarkResultV2>()
-  for (const row of manifest.results) {
-    if (
-      row.scenarioId === plan.scenarioId &&
-      row.modelId === plan.modelId &&
-      (row.replicate ?? 1) === plan.replicate &&
-      row.level < firstRerunLevel &&
-      row.scorable === true
-    ) {
-      rowsByLevel.set(row.level as EscalationLevel, row)
-    }
-  }
-
-  const prefixLevels = ALL_LEVELS.filter((level) => level < firstRerunLevel)
-  const missingPrefixLevels = prefixLevels.filter((level) => !rowsByLevel.has(level))
-  if (missingPrefixLevels.length > 0) {
-    throw new Error(
-      `Cannot rerun ${plan.modelId} | ${plan.scenarioId} | r${plan.replicate} from L${firstRerunLevel}; ` +
-      `missing clean prefix level(s): L${missingPrefixLevels.join(",L")}. Use --scope=all-levels for this pair.`
-    )
-  }
-
-  return prefixLevels.map((level) => ({ ...rowsByLevel.get(level)! }))
-}
-
 function loadBaseManifest(source: RerunSource, requestedRunId: string | undefined): { manifest: RunManifestV2; sourcePath: string } {
   const dataDir = getDataDir()
   let sourcePath: string
@@ -346,67 +277,6 @@ function loadBaseManifest(source: RerunSource, requestedRunId: string | undefine
   }
 }
 
-function buildPlan(manifest: RunManifestV2, scope: RerunScope, filters: PlanFilters = {}): {
-  failedRows: BenchmarkResultV2[]
-  failedKeySet: Set<string>
-  plans: FailedPairPlan[]
-  plannedPrompts: number
-} {
-  const failedRows = manifest.results.filter(isFailedRow)
-  const failedKeySet = new Set(failedRows.map(resultKey))
-
-  const byPair = new Map<string, FailedPairPlan>()
-  for (const row of failedRows) {
-    const level = row.level as EscalationLevel
-    const key = pairKey(row)
-    const existing = byPair.get(key)
-    if (!existing) {
-      byPair.set(key, {
-        scenarioId: row.scenarioId,
-        modelId: row.modelId,
-        replicate: row.replicate ?? 1,
-        module: toModuleId(row.module),
-        failedLevels: [level],
-        rerunLevels: [],
-      })
-      continue
-    }
-    existing.failedLevels.push(level)
-  }
-
-  let plans = Array.from(byPair.values())
-    .map((entry) => {
-      const failedLevels = toSortedLevels(entry.failedLevels)
-      return {
-        ...entry,
-        failedLevels,
-        rerunLevels: buildRerunLevels(scope, failedLevels),
-      }
-    })
-    .sort((a, b) => {
-      if (a.scenarioId === b.scenarioId) {
-        const modelDiff = a.modelId.localeCompare(b.modelId)
-        if (modelDiff !== 0) return modelDiff
-        return a.replicate - b.replicate
-      }
-      return a.scenarioId.localeCompare(b.scenarioId)
-    })
-
-  if (filters.includeModelIds) {
-    plans = plans.filter((plan) => filters.includeModelIds?.has(plan.modelId))
-  }
-  if (filters.excludeModelIds) {
-    plans = plans.filter((plan) => !filters.excludeModelIds?.has(plan.modelId))
-  }
-  if (filters.maxPairs !== undefined) {
-    plans = plans.slice(0, filters.maxPairs)
-  }
-
-  const plannedPrompts = plans.reduce((sum, item) => sum + item.rerunLevels.length, 0)
-
-  return { failedRows, failedKeySet, plans, plannedPrompts }
-}
-
 function formatStatusCounts(counts: RunManifestV2["summary"]["statusCounts"]): string {
   return `ok=${counts.ok}, model_error=${counts.model_error}, judge_error=${counts.judge_error}, aborted=${counts.aborted}, invalid_response=${counts.invalid_response}, skipped=${counts.skipped ?? 0}`
 }
@@ -427,6 +297,7 @@ function formatFailureRow(row: BenchmarkResultV2): string {
     `${row.modelId} ${row.scenarioId} L${row.level}`,
     `status=${row.status}`,
     `errorCode=${row.errorCode ?? "n/a"}`,
+    `scoreability=${row.scoreabilityReason ?? "n/a"}`,
     `endpoint=${row.endpointUsed ?? "n/a"}`,
     `attempts=${row.transportAttempts ?? 0}`,
     `message=${row.errorMessage ?? "n/a"}`,

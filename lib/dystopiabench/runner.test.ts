@@ -30,7 +30,23 @@ interface PendingJudgeFetch {
   resolve: (content: string) => void
 }
 
-function chatCompletionResponse(model: string, content: string) {
+const FIXTURE_MODEL_STRING = "openai/gpt-5.3-codex"
+
+function isFixtureModel(model: string | undefined): boolean {
+  return model === FIXTURE_MODEL_STRING
+}
+
+function chatCompletionResponse(
+  model: string,
+  content: string,
+  options: {
+    finishReason?: string
+    completionTokens?: number
+    reasoningTokens?: number
+  } = {},
+) {
+  const completionTokens = options.completionTokens ?? (content ? 2 : 0)
+  const reasoningTokens = options.reasoningTokens ?? 0
   return new Response(
     JSON.stringify({
       id: "chatcmpl-test",
@@ -45,13 +61,16 @@ function chatCompletionResponse(model: string, content: string) {
             role: "assistant",
             content,
           },
-          finish_reason: "stop",
+          finish_reason: options.finishReason ?? "stop",
         },
       ],
       usage: {
         prompt_tokens: 1,
-        completion_tokens: content ? 2 : 0,
-        total_tokens: content ? 3 : 1,
+        completion_tokens: completionTokens,
+        total_tokens: 1 + completionTokens,
+        completion_tokens_details: {
+          reasoning_tokens: reasoningTokens,
+        },
       },
     }),
     {
@@ -62,13 +81,19 @@ function chatCompletionResponse(model: string, content: string) {
 }
 
 async function readJsonRequestBody(input: RequestInfo | URL, init?: RequestInit): Promise<Record<string, unknown>> {
+  let body: Record<string, unknown>
   if (typeof init?.body === "string") {
-    return JSON.parse(init.body) as Record<string, unknown>
+    body = JSON.parse(init.body) as Record<string, unknown>
+  } else if (input instanceof Request) {
+    body = JSON.parse(await input.clone().text()) as Record<string, unknown>
+  } else {
+    body = {}
   }
-  if (input instanceof Request) {
-    return JSON.parse(await input.clone().text()) as Record<string, unknown>
-  }
-  return {}
+
+  assert.equal(body.max_tokens, undefined)
+  assert.equal(body.maxTokens, undefined)
+  assert.equal(body.maxOutputTokens, undefined)
+  return body
 }
 
 function createJudgeTestApiClients() {
@@ -333,7 +358,8 @@ test("runBenchmark level-wave schedules all L1 rows before L2 and preserves stat
     }
     const lastUser = [...(body.messages ?? [])].reverse().find((message) => message.role === "user")?.content ?? ""
 
-    if (body.max_tokens === 1500) {
+    if (isFixtureModel(body.model)) {
+      assert.equal(body.max_tokens, undefined)
       modelCalls.push({
         prompt: lastUser,
         assistantHistory: (body.messages ?? [])
@@ -388,7 +414,8 @@ test("runBenchmark skips downstream stateful levels after a chain-breaking model
     }
     const lastUser = [...(body.messages ?? [])].reverse().find((message) => message.role === "user")?.content ?? ""
 
-    if (body.max_tokens === 1500) {
+    if (isFixtureModel(body.model)) {
+      assert.equal(body.max_tokens, undefined)
       modelPrompts.push(lastUser)
       if (lastUser === "A-L2") {
         return new Response(JSON.stringify({ error: { message: "fixture model failure" } }), {
@@ -447,7 +474,8 @@ test("runBenchmark records repeated SDK empty responses without direct chat fall
       max_tokens?: number
     }
 
-    if (body.max_tokens === 1500) {
+    if (isFixtureModel(body.model)) {
+      assert.equal(body.max_tokens, undefined)
       modelCalls += 1
       return chatCompletionResponse(body.model ?? "model", "")
     }
@@ -481,8 +509,70 @@ test("runBenchmark records repeated SDK empty responses without direct chat fall
     assert.equal(modelCalls, 4)
     assert.equal(manifest.results.length, 2)
     assert.ok(manifest.results.every((row) => row.errorCode === "EMPTY_MODEL_RESPONSE"))
+    assert.ok(manifest.results.every((row) => row.status === "ok"))
+    assert.ok(manifest.results.every((row) => row.compliance === "refusal"))
+    assert.ok(manifest.results.every((row) => row.scoreabilityReason === "EMPTY_SILENT_REFUSAL"))
     assert.ok(manifest.results.every((row) => row.endpointUsed === "ai_sdk_chat"))
     assert.ok(manifest.results.every((row) => row.transportAttempts === 2))
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test("runBenchmark marks generated empty completions invalid instead of refusal", async () => {
+  const originalFetch = globalThis.fetch
+
+  globalThis.fetch = (async (input, init) => {
+    const body = await readJsonRequestBody(input, init) as {
+      model?: string
+      max_tokens?: number
+    }
+
+    if (isFixtureModel(body.model)) {
+      assert.equal(body.max_tokens, undefined)
+      return chatCompletionResponse(body.model ?? "model", "", {
+        finishReason: "length",
+        completionTokens: 1500,
+        reasoningTokens: 1200,
+      })
+    }
+
+    return chatCompletionResponse(
+      body.model ?? "judge",
+      JSON.stringify({ compliance: "refusal", reasoning: "Fixture judge." }),
+    )
+  }) as typeof fetch
+
+  try {
+    const manifest = await runBenchmark({
+      runId: "generated-empty-invalid-test",
+      module: "scheduler-test",
+      modelIds: ["gpt-5.3-codex"],
+      levels: [1],
+      judgeModel: "gpt-5.4-mini",
+      transportPolicy: "chat-first-fallback",
+      conversationMode: "stateful",
+      scheduler: "level-wave",
+      scenarioModules: [{
+        ...createSchedulerTestModule(),
+        scenarios: [createSchedulerTestModule().scenarios[0]],
+      }],
+      skipModelValidation: true,
+      replicates: 1,
+      concurrency: 1,
+      perModelConcurrency: 1,
+      maxRetries: 0,
+      retryBackoffBaseMs: 1,
+      retryBackoffJitterMs: 0,
+    })
+
+    assert.equal(manifest.results.length, 1)
+    assert.equal(manifest.results[0]?.status, "invalid_response")
+    assert.equal(manifest.results[0]?.errorCode, "EMPTY_GENERATED_COMPLETION")
+    assert.equal(manifest.results[0]?.scoreabilityReason, "EMPTY_GENERATED_COMPLETION")
+    assert.equal(manifest.results[0]?.score, null)
+    assert.equal(manifest.results[0]?.compliance, undefined)
+    assert.equal(manifest.summary.scoredPrompts, 0)
   } finally {
     globalThis.fetch = originalFetch
   }
@@ -498,7 +588,8 @@ test("runBenchmark falls back to direct chat only after SDK transport failure", 
       max_tokens?: number
     }
 
-    if (body.max_tokens === 1500) {
+    if (isFixtureModel(body.model)) {
+      assert.equal(body.max_tokens, undefined)
       modelCalls += 1
       if (modelCalls === 1) {
         return new Response(JSON.stringify({ error: { message: "upstream failed" } }), {
@@ -555,7 +646,8 @@ test("runBenchmark sends configured chat-first models directly to OpenRouter cha
       max_tokens?: number
     }
 
-    if (body.max_tokens === 1500) {
+    if (isFixtureModel(body.model)) {
+      assert.equal(body.max_tokens, undefined)
       modelRoutes.push(input instanceof Request ? "sdk" : "direct")
       return chatCompletionResponse(body.model ?? "model", "direct model response")
     }
@@ -611,7 +703,8 @@ test("runBenchmark records direct chat socket failures as row-level model errors
       max_tokens?: number
     }
 
-    if (body.max_tokens === 1500) {
+    if (isFixtureModel(body.model)) {
+      assert.equal(body.max_tokens, undefined)
       directModelCalls += 1
       const cause = Object.assign(new Error("other side closed"), { code: "UND_ERR_SOCKET" })
       throw Object.assign(new TypeError("terminated"), { cause })
@@ -889,8 +982,8 @@ test("runManifestV2Schema accepts schemaVersion 4 manifests with new metadata", 
       rerunPairCount: 1,
       replacedTupleCount: 2,
       generationConfig: {
-        model: { temperature: 0, topP: 1, maxOutputTokens: 1500 },
-        judge: { temperature: 0, topP: 1, maxOutputTokens: 220 },
+        model: { temperature: 0, topP: 1 },
+        judge: { temperature: 0, topP: 1 },
         retryPolicy: { maxRetries: 2, backoffBaseMs: 1000, backoffJitterMs: 1000 },
         timeoutMs: 90000,
       },

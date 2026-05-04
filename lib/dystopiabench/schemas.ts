@@ -32,6 +32,11 @@ export const traceCaptureSourceSchema = z.enum([
   "provider-metadata",
   "unavailable",
 ])
+export const scoreabilityReasonSchema = z.enum([
+  "EMPTY_GENERATED_COMPLETION",
+  "EMPTY_SILENT_REFUSAL",
+  "PROVIDER_CONTENT_FILTER",
+])
 export const adjudicationSourceSchema = z.enum([
   "single-judge",
   "judge-panel",
@@ -47,20 +52,34 @@ export const GENERATION_CONFIG = {
   model: {
     temperature: 0,
     topP: 1,
-    maxOutputTokens: 1500,
   },
   judge: {
     temperature: 0,
     topP: 1,
-    maxOutputTokens: 220,
   },
   retryPolicy: {
     maxRetries: 2,
     backoffBaseMs: 1000,
     backoffJitterMs: 1000,
   },
-  timeoutMs: 90_000,
+  timeoutMs: 600_000,
 } as const
+
+const generationModelConfigSchema = z.object({
+  temperature: z.number(),
+  topP: z.number().min(0).max(1).optional(),
+  // Deprecated: accepted for historical manifests, but not written by new runs.
+  maxOutputTokens: z.number().int().positive().optional(),
+})
+
+const generationJudgeConfigSchema = z.object({
+  temperature: z.number(),
+  topP: z.number().min(0).max(1).optional(),
+  // Deprecated: accepted for historical manifests, but not written by new runs.
+  maxTokens: z.number().int().positive().optional(),
+  // Deprecated: accepted for historical manifests, but not written by new runs.
+  maxOutputTokens: z.number().int().positive().optional(),
+})
 
 export const judgeVoteSchema = z.object({
   judge: z.string(),
@@ -172,14 +191,22 @@ export const repeatStatsSummarySchema = z.object({
   maxWithinTupleStdDev: z.number().nonnegative(),
 })
 
+const tokenCountSchema = z.number().int().nonnegative()
+const legacyTextOutputTokenCountSchema = z.preprocess((value) => {
+  // Legacy capped OpenRouter runs computed this derived field as output minus reasoning.
+  // Reasoning tokens could exceed capped output tokens, so clamp those old rows on read.
+  if (typeof value === "number" && value < 0) return 0
+  return value
+}, tokenCountSchema)
+
 export const tokenUsageSummarySchema = z.object({
-  inputTokens: z.number().int().nonnegative().default(0),
-  cachedInputTokens: z.number().int().nonnegative().default(0),
-  uncachedInputTokens: z.number().int().nonnegative().default(0),
-  outputTokens: z.number().int().nonnegative().default(0),
-  textOutputTokens: z.number().int().nonnegative().default(0),
-  reasoningTokens: z.number().int().nonnegative().default(0),
-  totalTokens: z.number().int().nonnegative().default(0),
+  inputTokens: tokenCountSchema.default(0),
+  cachedInputTokens: tokenCountSchema.default(0),
+  uncachedInputTokens: tokenCountSchema.default(0),
+  outputTokens: tokenCountSchema.default(0),
+  textOutputTokens: legacyTextOutputTokenCountSchema.default(0),
+  reasoningTokens: tokenCountSchema.default(0),
+  totalTokens: tokenCountSchema.default(0),
 })
 
 export const costBreakdownSchema = z.object({
@@ -226,7 +253,7 @@ export const benchmarkResultV2Schema = z.object({
   level: z.number().int().min(1).max(5),
   prompt: z.string(),
   response: z.string(),
-  compliance: complianceRatingSchema,
+  compliance: complianceRatingSchema.optional(),
   primaryComplianceLabel: complianceRatingSchema.optional(),
   score: z.number().int().min(0).max(100).nullable(),
   status: benchmarkStatusSchema,
@@ -275,6 +302,7 @@ export const benchmarkResultV2Schema = z.object({
   sourceLocale: localeTagSchema.optional(),
   traceAvailability: traceAvailabilitySchema.optional(),
   traceCaptureSource: traceCaptureSourceSchema.optional(),
+  scoreabilityReason: scoreabilityReasonSchema.optional(),
   reasoningTraceText: z.string().optional(),
   reasoningTokenCount: z.number().int().nonnegative().optional(),
   promptTokenCount: z.number().int().nonnegative().optional(),
@@ -356,16 +384,8 @@ export const executionConfigSchema = z.object({
     backoffJitterMs: z.number().int().nonnegative(),
   }),
   generationConfig: z.object({
-    model: z.object({
-      temperature: z.number(),
-      topP: z.number().min(0).max(1).optional(),
-      maxOutputTokens: z.number().int().positive(),
-    }),
-    judge: z.object({
-      temperature: z.number(),
-      topP: z.number().min(0).max(1).optional(),
-      maxOutputTokens: z.number().int().positive(),
-    }),
+    model: generationModelConfigSchema,
+    judge: generationJudgeConfigSchema,
   }),
 })
 
@@ -436,16 +456,8 @@ export const runMetadataV2Schema = z.object({
   evalCardPath: z.string().optional(),
   generationConfig: z
     .object({
-      model: z.object({
-        temperature: z.number(),
-        topP: z.number().min(0).max(1).optional(),
-        maxOutputTokens: z.number().int().positive(),
-      }),
-      judge: z.object({
-        temperature: z.number(),
-        topP: z.number().min(0).max(1).optional(),
-        maxOutputTokens: z.number().int().positive(),
-      }),
+      model: generationModelConfigSchema,
+      judge: generationJudgeConfigSchema,
       retryPolicy: z.object({
         maxRetries: z.number().int().nonnegative(),
         backoffBaseMs: z.number().int().positive(),

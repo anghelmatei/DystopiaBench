@@ -248,7 +248,7 @@ function main() {
 
           const reason = chainAlreadyBroken
             ? `Skipped because a prior stateful level failed for ${modelId}/${scenario.id} replicate ${replicate}.`
-            : `Skipped selected flaky model ${modelId} in main pass; rerun this pair in the repair pass.`
+            : `Skipped selected model ${modelId} in main pass; rerun this pair in the repair pass.`
           const row = makeSkippedRow({
             checkpoint,
             scenario,

@@ -20,11 +20,20 @@ const DashboardTabs = dynamic(
 )
 
 function MountedResultsTabs() {
-  const { statefulResults, isolatedLatestResults } = useBenchmarkData()
+  const {
+    loading,
+    statefulResults,
+    statefulManifest,
+    isolatedLatestResults,
+    isolatedLatestManifest,
+  } = useBenchmarkData()
   return (
     <DashboardTabs
+      loading={loading}
       statefulResults={statefulResults}
       isolatedResults={isolatedLatestResults}
+      statefulManifest={statefulManifest}
+      isolatedManifest={isolatedLatestManifest}
     />
   )
 }

@@ -20,6 +20,20 @@ interface ResolvedRun {
   missingRun: boolean
 }
 
+function getRunIndexVersion(run: RunIndexItem | undefined): string | undefined {
+  if (!run) return undefined
+  return [
+    run.id,
+    run.timestamp,
+    run.metadata.models.join(","),
+    run.metadata.totalPrompts,
+    run.summary.scoredPrompts,
+    run.summary.statusCounts.ok ?? 0,
+    run.summary.statusCounts.model_error ?? 0,
+    run.summary.statusCounts.judge_error ?? 0,
+  ].join(":")
+}
+
 export interface BenchmarkDataState {
   loading: boolean
   statefulRuns: RunIndexItem[]
@@ -48,12 +62,13 @@ export function useBenchmarkData(): BenchmarkDataState {
   const [isolatedLoadError, setIsolatedLoadError] = useState<string | null>(null)
 
   const selectedStatefulRunIdRef = useRef<SelectedRunId>("latest")
-  const statefulLatestVersionRef = useRef(0)
-  const statelessLatestVersionRef = useRef(0)
+  const statefulLatestVersionRef = useRef<string | number | undefined>(undefined)
+  const statelessLatestVersionRef = useRef<string | number | undefined>(undefined)
 
   const resolveStatefulRun = useCallback(async (
     runId: SelectedRunId,
     latestStatefulRunId?: string,
+    selectedRunVersion?: string,
   ): Promise<ResolvedRun> => {
     try {
       const latestOptions =
@@ -63,7 +78,10 @@ export function useBenchmarkData(): BenchmarkDataState {
             latestMode: "stateful" as const,
             expectedMode: "stateful" as const,
           }
-          : { expectedMode: "stateful" as const }
+          : {
+            latestVersion: selectedRunVersion,
+            expectedMode: "stateful" as const,
+          }
 
       let loaded = await loadSavedRun(
         runId === "latest" ? undefined : runId,
@@ -134,12 +152,13 @@ export function useBenchmarkData(): BenchmarkDataState {
   const setSelectedStatefulRunId = useCallback(
     async (runId: SelectedRunId) => {
       if (runId !== selectedStatefulRunIdRef.current) {
-        statefulLatestVersionRef.current += 1
         selectedStatefulRunIdRef.current = runId
       }
 
       setSelectedStatefulRunIdState(runId)
-      const resolved = await resolveStatefulRun(runId, statefulRuns[0]?.id)
+      const selectedRunVersion =
+        runId === "latest" ? undefined : getRunIndexVersion(statefulRuns.find((run) => run.id === runId))
+      const resolved = await resolveStatefulRun(runId, statefulRuns[0]?.id, selectedRunVersion)
       setStatefulResults(resolved.results)
       setStatefulManifest(resolved.manifest)
       setStatefulLoadError(resolved.loadError)
@@ -155,11 +174,20 @@ export function useBenchmarkData(): BenchmarkDataState {
       const filteredStatefulRuns = runIndex.filter((run) => {
         return getRunConversationMode(run) === "stateful" && isDashboardDisplayCompatibleMetadata(run.metadata)
       })
+      const filteredStatelessRuns = runIndex.filter((run) => {
+        return getRunConversationMode(run) === "stateless" && isDashboardDisplayCompatibleMetadata(run.metadata)
+      })
       setStatefulRuns(filteredStatefulRuns)
 
       const latestStatefulRunId = filteredStatefulRuns[0]?.id
+      statefulLatestVersionRef.current = getRunIndexVersion(filteredStatefulRuns[0])
+      statelessLatestVersionRef.current = getRunIndexVersion(filteredStatelessRuns[0])
+      const selectedRunVersion =
+        selectedStatefulRunIdRef.current === "latest"
+          ? undefined
+          : getRunIndexVersion(filteredStatefulRuns.find((run) => run.id === selectedStatefulRunIdRef.current))
       const [resolvedStateful, resolvedIsolated] = await Promise.all([
-        resolveStatefulRun(selectedStatefulRunIdRef.current, latestStatefulRunId),
+        resolveStatefulRun(selectedStatefulRunIdRef.current, latestStatefulRunId, selectedRunVersion),
         resolveLatestIsolatedRun(),
       ])
 

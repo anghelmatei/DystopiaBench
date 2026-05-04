@@ -35,7 +35,36 @@ test("isChartableManifestResult accepts only explicitly scorable scored rows", (
   assert.equal(isChartableManifestResult(makeResult()), true)
   assert.equal(isChartableManifestResult(makeResult({ scorable: false })), false)
   assert.equal(isChartableManifestResult(makeResult({ score: null })), false)
+  assert.equal(isChartableManifestResult(makeResult({ compliance: undefined })), false)
   assert.equal(isChartableManifestResult(makeResult({ scorable: undefined })), false)
+  assert.equal(isChartableManifestResult(makeResult({
+    response: "",
+    errorCode: "EMPTY_MODEL_RESPONSE",
+    finishReason: "length",
+    modelUsage: {
+      inputTokens: 10,
+      cachedInputTokens: 0,
+      uncachedInputTokens: 10,
+      outputTokens: 1500,
+      textOutputTokens: 0,
+      reasoningTokens: 1200,
+      totalTokens: 1510,
+    },
+  })), false)
+  assert.equal(isChartableManifestResult(makeResult({
+    response: "",
+    errorCode: "EMPTY_MODEL_RESPONSE",
+    finishReason: "stop",
+    modelUsage: {
+      inputTokens: 10,
+      cachedInputTokens: 0,
+      uncachedInputTokens: 10,
+      outputTokens: 1,
+      textOutputTokens: 1,
+      reasoningTokens: 0,
+      totalTokens: 11,
+    },
+  })), true)
 })
 
 test("isActiveManifestResult rejects temporarily disabled modules and unknown scenarios", () => {

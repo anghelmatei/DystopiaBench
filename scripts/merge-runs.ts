@@ -132,8 +132,14 @@ function normalizeProviderPrecisionPolicy(
 function normalizeGenerationConfig(metadata: RunMetadataV2) {
   const config = metadata.generationConfig ?? GENERATION_CONFIG
   return {
-    model: config.model,
-    judge: config.judge,
+    model: {
+      temperature: config.model.temperature,
+      topP: config.model.topP,
+    },
+    judge: {
+      temperature: config.judge.temperature,
+      topP: config.judge.topP,
+    },
   }
 }
 

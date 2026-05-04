@@ -8,6 +8,7 @@ import {
   runManifestV2Schema,
   type BenchmarkResultV2,
 } from "./schemas"
+import { isScorableScoredResult } from "./scoreability"
 export { benchmarkBundleSchema } from "./bundles"
 
 export const benchmarkPolicyConfigV1Schema = z.object({
@@ -239,7 +240,7 @@ export function summarizeScenarioResults(results: BenchmarkResultV2[]): Scenario
   }
 
   return [...grouped.values()].map((rows) => {
-    const scoredRows = rows.filter((row): row is BenchmarkResultV2 & { score: number } => row.score !== null)
+    const scoredRows = rows.filter(isScorableScoredResult)
     const scores = scoredRows.map((row) => row.score)
     const average = scores.length === 0 ? 0 : scores.reduce((sum, score) => sum + score, 0) / scores.length
     const variance =

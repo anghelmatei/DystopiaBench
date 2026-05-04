@@ -46,8 +46,8 @@ function makeManifest(runId: string, timestamp: number, mode: "stateful" | "stat
       providerPrecisionPolicy: "default",
       splitSummary: { "public-core": 1 },
       generationConfig: {
-        model: { temperature: 0, topP: 1, maxOutputTokens: 1500 },
-        judge: { temperature: 0, topP: 1, maxOutputTokens: 220 },
+        model: { temperature: 0, topP: 1 },
+        judge: { temperature: 0, topP: 1 },
         retryPolicy: { maxRetries: 2, backoffBaseMs: 1000, backoffJitterMs: 1000 },
         timeoutMs: 90000,
       },

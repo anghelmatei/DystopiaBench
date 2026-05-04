@@ -24,11 +24,6 @@ const AggregateCharts = dynamic(
   { ssr: false, loading: ChartPanelLoading },
 )
 
-const LanguageCharts = dynamic(
-  () => import("@/components/bench/charts/language-charts").then((mod) => mod.LanguageCharts),
-  { ssr: false, loading: ChartPanelLoading },
-)
-
 const ModuleCharts = dynamic(
   () => import("@/components/bench/charts/module-charts").then((mod) => mod.ModuleCharts),
   { ssr: false, loading: ChartPanelLoading },
@@ -55,6 +50,7 @@ function normalizeSelection(selected: string[], available: string[], { initial =
 }
 
 interface DashboardTabsProps {
+  loading?: boolean
   statefulResults: BenchmarkResult[]
   isolatedResults: BenchmarkResult[]
   statefulManifest?: RunManifestV2 | null
@@ -62,6 +58,7 @@ interface DashboardTabsProps {
 }
 
 export function DashboardTabs({
+  loading = false,
   statefulResults,
   isolatedResults,
   statefulManifest,
@@ -90,7 +87,7 @@ export function DashboardTabs({
   )
 
   const [requestedActiveTab, setActiveTab] = useState<string>(
-    statefulResults.length > 0 ? "aggregate" : "prompt_no_escalation",
+    "aggregate",
   )
   const [hasInteracted, setHasInteracted] = useState(false)
   const [rawSelectedModelIds, setRawSelectedModelIds] = useState<string[]>([])
@@ -117,11 +114,13 @@ export function DashboardTabs({
     [isolatedResults, selectedSet],
   )
 
-  const activeTab =
-    statefulResults.length === 0 && isolatedResults.length > 0 ? "prompt_no_escalation" : requestedActiveTab
+  const activeTab = requestedActiveTab
   const activeResults = activeTab === "prompt_no_escalation" ? filteredIsolatedResults : filteredStatefulResults
   const scenarioCount = new Set(activeResults.map((row) => row.scenarioId)).size
   const activeManifest = activeTab === "prompt_no_escalation" ? isolatedManifest : statefulManifest
+  const activeUnscorableCount = activeManifest
+    ? Math.max(0, activeManifest.summary.totalPrompts - activeManifest.summary.scoredPrompts)
+    : 0
 
   const toggleModel = (modelId: string) => {
     setHasInteracted(true)
@@ -139,6 +138,19 @@ export function DashboardTabs({
       if (next.length === availableModelIds.length) return []
       return availableModelIds
     })
+  }
+
+  if (loading) {
+    return (
+      <Card className="border-border bg-card p-6">
+        <p className="mb-3 font-mono text-xs text-muted-foreground uppercase">
+          Loading published benchmark results...
+        </p>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          Reading the run index and resolving the latest stateful and isolated manifests.
+        </p>
+      </Card>
+    )
   }
 
   if (hasNoResults) {
@@ -217,7 +229,7 @@ export function DashboardTabs({
               Cost ${activeManifest.summary.telemetry?.estimatedCostUsd.totalUsd.toFixed(2) ?? "0.00"}
             </p>
             <p className="mt-1 font-mono text-[10px] uppercase text-muted-foreground">
-              Tokens {activeManifest.summary.telemetry?.totalUsage.totalTokens ?? 0} / Reasoning {activeManifest.summary.telemetry?.totalUsage.reasoningTokens ?? 0}
+              Scored {activeManifest.summary.scoredPrompts}/{activeManifest.summary.totalPrompts} / Unscorable {activeUnscorableCount}
             </p>
           </Card>
         </div>
@@ -246,7 +258,6 @@ export function DashboardTabs({
       {activeTab === "aggregate" && (
         <div className="flex flex-col gap-6">
           <AggregateCharts results={filteredStatefulResults} />
-          <LanguageCharts results={filteredStatefulResults} />
         </div>
       )}
       {moduleTabs.map((tab) => (

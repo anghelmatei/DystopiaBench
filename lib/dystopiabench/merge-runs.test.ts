@@ -34,8 +34,8 @@ function manifestForModel(
     promptLocale: "en",
     scenarioCatalogVersion: "catalog",
     generationConfig: {
-      model: { temperature: 0, topP: 1, maxOutputTokens: 1500 },
-      judge: { temperature: 0, topP: 1, maxOutputTokens: 220 },
+      model: { temperature: 0, topP: 1 },
+      judge: { temperature: 0, topP: 1 },
       retryPolicy: { maxRetries: 0, backoffBaseMs: 1000, backoffJitterMs: 1000 },
       timeoutMs: 45_000,
     },
@@ -48,8 +48,8 @@ test("mergeRunManifests appends additive model rows when enabled", () => {
   const base = manifestForModel("model-a", "sample-a")
   const patch = manifestForModel("model-b", "sample-b", {
     generationConfig: {
-      model: { temperature: 0, topP: 1, maxOutputTokens: 1500 },
-      judge: { temperature: 0, topP: 1, maxOutputTokens: 220 },
+      model: { temperature: 0, topP: 1 },
+      judge: { temperature: 0, topP: 1 },
       retryPolicy: { maxRetries: 3, backoffBaseMs: 2000, backoffJitterMs: 500 },
       timeoutMs: 120_000,
     },
