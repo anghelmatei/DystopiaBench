@@ -11,6 +11,7 @@ import {
   type RunIndexItemV2,
   type RunManifestV2,
 } from "./schemas"
+import { getModelById } from "./models"
 
 /** Map legacy compliance values to the new 4-tier attitude scale. */
 const LEGACY_COMPLIANCE_MAP: Record<string, ComplianceRating> = {
@@ -77,24 +78,27 @@ export interface LoadedRunData {
 export function toChartResults(manifest: RunManifestV2): BenchmarkResult[] {
   return aggregateResultsByTuple(filterChartableManifestResults(manifest))
     .filter((result): result is typeof result & { score: number } => typeof result.score === "number")
-    .map((result) => ({
-      scenarioId: result.scenarioId,
-      ...(result.canonicalScenarioId ? { canonicalScenarioId: result.canonicalScenarioId } : {}),
-      scenarioTitle: result.scenarioTitle,
-      scenarioCategory: result.scenarioCategory,
-      module: toModuleId(result.module),
-      modelId: result.modelId,
-      modelLabel: result.modelLabel,
-      provider: result.provider,
-      level: result.level as 1 | 2 | 3 | 4 | 5,
-      compliance: migrateCompliance(result.compliance),
-      score: Math.round(result.score),
-      replicateCount: result.observedReplicates,
-      scoreStdDev: result.scoreStdDev,
-      ...(typeof result.refusalRate === "number" ? { refusalRate: result.refusalRate } : {}),
-      ...(result.promptLocale ? { promptLocale: result.promptLocale } : {}),
-      ...(result.sourceLocale ? { sourceLocale: result.sourceLocale } : {}),
-    }))
+    .map((result) => {
+      const model = getModelById(result.modelId)
+      return {
+        scenarioId: result.scenarioId,
+        ...(result.canonicalScenarioId ? { canonicalScenarioId: result.canonicalScenarioId } : {}),
+        scenarioTitle: result.scenarioTitle,
+        scenarioCategory: result.scenarioCategory,
+        module: toModuleId(result.module),
+        modelId: result.modelId,
+        modelLabel: model?.label ?? result.modelLabel,
+        provider: model?.provider ?? result.provider,
+        level: result.level as 1 | 2 | 3 | 4 | 5,
+        compliance: migrateCompliance(result.compliance),
+        score: Math.round(result.score),
+        replicateCount: result.observedReplicates,
+        scoreStdDev: result.scoreStdDev,
+        ...(typeof result.refusalRate === "number" ? { refusalRate: result.refusalRate } : {}),
+        ...(result.promptLocale ? { promptLocale: result.promptLocale } : {}),
+        ...(result.sourceLocale ? { sourceLocale: result.sourceLocale } : {}),
+      }
+    })
 }
 
 function normalizeManifestConversationMode(manifest: RunManifestV2): RunManifestV2 {
@@ -134,7 +138,7 @@ export async function loadRuns(): Promise<RunIndexItem[]> {
 }
 
 export interface LoadSavedRunOptions {
-  latestVersion?: number
+  latestVersion?: number | string
   latestMode?: RunConversationMode
   expectedMode?: RunConversationMode
 }
@@ -162,9 +166,9 @@ export async function loadSavedRun(
     const latestMode = options?.latestMode
     const expectedMode = options?.expectedMode
     const decorateVersion = (path: string) =>
-      latestVersion && latestVersion > 0 ? `${path}?v=${latestVersion}` : path
+      latestVersion !== undefined && latestVersion !== "" ? `${path}?v=${encodeURIComponent(String(latestVersion))}` : path
     const urlCandidates = runId
-      ? [`/data/benchmark-${runId}.json.gz`, `/data/benchmark-${runId}.json`]
+      ? [decorateVersion(`/data/benchmark-${runId}.json.gz`), decorateVersion(`/data/benchmark-${runId}.json`)]
       : latestMode === "stateless"
         ? [decorateVersion("/data/benchmark-results-stateless.json")]
         : latestMode === "stateful"
@@ -177,7 +181,7 @@ export async function loadSavedRun(
           : [decorateVersion("/data/benchmark-results.json.gz"), decorateVersion("/data/benchmark-results.json")]
 
     for (const url of urlCandidates) {
-      const res = await fetch(url, { cache: runId ? "force-cache" : "no-cache" })
+      const res = await fetch(url, { cache: "force-cache" })
       if (!res.ok) continue
 
       const json = await readJsonResponse(res)

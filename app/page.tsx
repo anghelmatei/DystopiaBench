@@ -9,7 +9,7 @@ import {
 } from "lucide-react"
 import { DeferredResultsTabs } from "@/components/bench/deferred-results-tabs"
 import { BenchHeader } from "@/components/bench/header"
-import { getResponsiveBarChartLayout } from "@/lib/dystopiabench/chart-config"
+import { MODEL_COLORS, getResponsiveBarChartLayout } from "@/lib/dystopiabench/chart-config"
 import { getAggregateByModel } from "@/lib/dystopiabench/analytics"
 import { getBenchmarkData } from "@/lib/dystopiabench/data-fetcher"
 import { AVAILABLE_MODELS } from "@/lib/dystopiabench/models"
@@ -18,24 +18,26 @@ export default async function DashboardPage() {
   const { results } = await getBenchmarkData()
   const showLocalRunLink = process.env.NODE_ENV !== "production"
   const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-  const heroModelFamilies = ["gpt", "opus", "gemini", "deepseek"] as const
+  const heroModelIds = ["gpt-5.5", "claude-opus-4.7", "gemini-3.1-pro", "deepseek-v4-pro"] as const
   const aggregateByModel = getAggregateByModel(results)
-  const heroAggregate = heroModelFamilies
-    .map((family) => {
-      const entry = aggregateByModel.find((candidate) => candidate.modelId.toLowerCase().includes(family))
+  const heroAggregate = heroModelIds
+    .map((modelId) => {
+      const entry = aggregateByModel.find((candidate) => candidate.modelId === modelId)
       if (entry) {
         return {
+          modelId,
           model: entry.label,
           score: entry.avgScore,
           provider: entry.provider,
         }
       }
 
-      const fallback = AVAILABLE_MODELS.find((model) => model.id.toLowerCase().includes(family))
+      const fallback = AVAILABLE_MODELS.find((model) => model.id === modelId)
       return {
-        model: fallback?.label ?? family.toUpperCase(),
+        modelId,
+        model: fallback?.label ?? modelId.toUpperCase(),
         score: null,
-        provider: fallback?.provider ?? family.toUpperCase(),
+        provider: fallback?.provider ?? modelId.toUpperCase(),
       }
     })
     .sort((a, b) => {
@@ -160,30 +162,33 @@ export default async function DashboardPage() {
                             style={{ bottom: `${toBarPct(tick)}%` }}
                           />
                         ))}
-                        {heroAggregate.map((item) => (
-                          <div key={item.model} className="group relative z-10 flex h-full flex-1 flex-col items-center">
+                        {heroAggregate.map((item) => {
+                          const modelColor = MODEL_COLORS[item.modelId] ?? "#888888"
+                          return (
+                          <div key={item.modelId} className="group relative z-10 flex h-full flex-1 flex-col items-center">
                             <div className="relative flex h-full w-full flex-col items-center justify-end">
                               <div
-                                className={`relative w-full overflow-visible rounded-t-sm transition-all duration-700 ease-out ${
-                                  item.score === null
-                                    ? "bg-muted/50"
-                                    : "bg-destructive/80 group-hover:bg-destructive"
-                                }`}
+                                className="relative w-full overflow-visible rounded-t-sm transition-all duration-700 ease-out"
                                 style={{
+                                  backgroundColor: item.score === null ? "hsl(var(--muted) / 0.5)" : modelColor,
                                   height: item.score === null ? "0%" : `${toBarPct(item.score)}%`,
                                   maxWidth: heroBarMaxWidth,
                                 }}
                               >
                                 <div className="absolute inset-0 rounded-t-sm bg-gradient-to-t from-black/20 to-transparent" />
                                 <div className="absolute -top-7 left-0 right-0 z-10 flex justify-center opacity-0 transition-opacity group-hover:opacity-100">
-                                  <span className="rounded border border-destructive/20 bg-background/80 px-2 py-0.5 font-mono text-xs font-bold text-destructive backdrop-blur-sm">
+                                  <span
+                                    className="rounded border bg-background/80 px-2 py-0.5 font-mono text-xs font-bold backdrop-blur-sm"
+                                    style={{ borderColor: `${modelColor}55`, color: modelColor }}
+                                  >
                                     {item.score ?? "N/A"}
                                   </span>
                                 </div>
                               </div>
                             </div>
                           </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     </div>
 

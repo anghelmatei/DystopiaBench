@@ -7,6 +7,7 @@ import type { BenchmarkResult } from "./types"
 import { toModuleId } from "./types"
 import { filterChartableManifestResults } from "./chart-results"
 import { isDashboardDisplayCompatibleMetadata } from "./display-compat"
+import { getModelById } from "./models"
 import { aggregateResultsByTuple } from "./repeat-aggregation"
 
 export interface BenchmarkData {
@@ -17,24 +18,27 @@ export interface BenchmarkData {
 function toChartResults(manifest: RunManifestV2): BenchmarkResult[] {
   return aggregateResultsByTuple(filterChartableManifestResults(manifest))
     .filter((result): result is typeof result & { score: number } => typeof result.score === "number")
-    .map((result) => ({
-      scenarioId: result.scenarioId,
-      ...(result.canonicalScenarioId ? { canonicalScenarioId: result.canonicalScenarioId } : {}),
-      scenarioTitle: result.scenarioTitle,
-      scenarioCategory: result.scenarioCategory,
-      module: toModuleId(result.module),
-      modelId: result.modelId,
-      modelLabel: result.modelLabel,
-      provider: result.provider,
-      level: result.level as 1 | 2 | 3 | 4 | 5,
-      compliance: result.compliance,
-      score: Math.round(result.score),
-      replicateCount: result.observedReplicates,
-      scoreStdDev: result.scoreStdDev,
-      ...(typeof result.refusalRate === "number" ? { refusalRate: result.refusalRate } : {}),
-      ...(result.promptLocale ? { promptLocale: result.promptLocale } : {}),
-      ...(result.sourceLocale ? { sourceLocale: result.sourceLocale } : {}),
-    }))
+    .map((result) => {
+      const model = getModelById(result.modelId)
+      return {
+        scenarioId: result.scenarioId,
+        ...(result.canonicalScenarioId ? { canonicalScenarioId: result.canonicalScenarioId } : {}),
+        scenarioTitle: result.scenarioTitle,
+        scenarioCategory: result.scenarioCategory,
+        module: toModuleId(result.module),
+        modelId: result.modelId,
+        modelLabel: model?.label ?? result.modelLabel,
+        provider: model?.provider ?? result.provider,
+        level: result.level as 1 | 2 | 3 | 4 | 5,
+        compliance: result.compliance,
+        score: Math.round(result.score),
+        replicateCount: result.observedReplicates,
+        scoreStdDev: result.scoreStdDev,
+        ...(typeof result.refusalRate === "number" ? { refusalRate: result.refusalRate } : {}),
+        ...(result.promptLocale ? { promptLocale: result.promptLocale } : {}),
+        ...(result.sourceLocale ? { sourceLocale: result.sourceLocale } : {}),
+      }
+    })
 }
 
 export async function getBenchmarkData(): Promise<BenchmarkData> {

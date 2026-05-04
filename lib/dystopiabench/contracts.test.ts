@@ -42,8 +42,8 @@ function makeManifest(overrides: Partial<RunManifestV2> = {}): RunManifestV2 {
       providerPrecisionPolicy: "default",
       replicates: 2,
       generationConfig: {
-        model: { temperature: 0, topP: 1, maxOutputTokens: 1500 },
-        judge: { temperature: 0, topP: 1, maxOutputTokens: 220 },
+        model: { temperature: 0, topP: 1 },
+        judge: { temperature: 0, topP: 1 },
         retryPolicy: { maxRetries: 2, backoffBaseMs: 1000, backoffJitterMs: 1000 },
         timeoutMs: 90000,
       },

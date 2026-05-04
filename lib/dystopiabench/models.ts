@@ -329,7 +329,7 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
   },
   {
     id: "tencent-hy3-preview-free",
-    label: "HY3 Preview (free)",
+    label: "HY3 Preview",
     provider: "Tencent",
     modelString: "tencent/hy3-preview:free",
     weightClass: "open_weight",

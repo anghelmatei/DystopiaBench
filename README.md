@@ -64,7 +64,6 @@ Scenario content lives in JSON module files under `lib/dystopiabench/scenario-da
 - Experiment metadata (`experimentId`, `project`, `owner`, `policyVersion`, `gitCommit`, `datasetBundleVersion`)
 - Repeated trials via `--replicates`
 - Repeat-aware aggregation for refusal-rate variance and replicate summaries
-- Multilingual scenario locale packs plus locale-aware exports and charts
 - Awareness-analysis pass for evaluation-recognition and trace-consistency signals
 - Programmatic scenario loading from local, URL, and `npm:` JSON scenario sources
 - Export scripts for JSONL prompt rows, CSV summaries, parquet artifacts, Inspect-style logs, OpenAI-Evals-style JSONL, and eval cards
@@ -167,10 +166,9 @@ pnpm bench:run --judge-model=google/gemini-3-flash-preview --transport=chat-only
 pnpm bench:run --judge-models=google/gemini-3-flash-preview,claude-opus-4.6
 pnpm bench:run --judge-model=claude-opus-4.6 --judge-strategy=pair-with-tiebreak
 pnpm bench:run --provider-precision=non-quantized-only
-pnpm bench:run --scheduler=level-wave --concurrency=24 --per-model-concurrency=3 --timeout-ms=90000
+pnpm bench:run --scheduler=level-wave --concurrency=24 --per-model-concurrency=3 --timeout-ms=600000
 pnpm bench:run-isolated --module=petrov --models=gpt-5.3-codex --levels=5
 pnpm bench:run --retain=20 --archive-dir=archive
-pnpm bench:run --locale-preset=ro --replicates=3
 ```
 
 Main `bench:run` flags:
@@ -216,9 +214,6 @@ Main `bench:run` flags:
 - `--benchmark-id=<bundle-family-id>`
 - `--benchmark-bundle-version=<semver>`
 - `--scenario-sources=<comma-separated source paths, URLs, or npm: package paths>`
-- `--locale-pack=<path-to-locale-pack.json>`
-- `--locale-pack-id=<locale-pack-id>`
-- `--locale-preset=<locale-code>`
 
 Isolated mode shortcut:
 
@@ -228,17 +223,9 @@ pnpm bench:run-isolated
 
 `bench:run-isolated` is equivalent to running `bench:run` with `--conversation-mode=stateless`, where each prompt executes in fresh context. Use this to answer questions like "does L5 comply when run alone?"
 
-### Reliability profile (for unstable models)
-
-Use this profile when you see timeout-heavy or empty-response-heavy runs on specific providers:
-
-```bash
-pnpm bench:run-isolated --models=qwen3.5,claude-opus-4.6 --levels=4,5 --timeout-ms=90000 --max-retries=2 --transport=chat-first-fallback --per-model-concurrency=1
-```
-
 By default, stateful runs use `--scheduler=level-wave`, which schedules all ready rows for L1 across scenarios/models/replicates before advancing to L2. The global `--concurrency` and per-tested-model `--per-model-concurrency` caps still apply; do not set them to the full Cartesian product unless you intend to stress provider rate limits.
 
-Empty completions after a single retry are recorded as implicit refusals (`status=ok`, `compliance=refusal`) with `errorCode=EMPTY_MODEL_RESPONSE` and `implicitRefusalFromEmpty=true`. OpenRouter primary calls use the official SDK chat path, and direct chat fallback is reserved for transport or response-shape failures rather than successful empty completions.
+Empty completions after a single retry are split by provider metadata. Near-zero stopped outputs and provider content filters are recorded as silent/provider refusals. Empty completions that consumed output or reasoning tokens without final answer text are recorded as `invalid_response` with `errorCode=EMPTY_GENERATED_COMPLETION`, so they are rerun instead of counted as refusals. OpenRouter primary calls use the official SDK chat path, and direct chat fallback is reserved for transport failures rather than successful empty completions.
 
 ### Interruptions and resume
 
@@ -274,15 +261,6 @@ This writes `artifacts/private/openrouter-traces/openrouter-traces-<run-id>.json
 Use this when you want long-term local retention for website display or paper artifacts instead of relying on OpenRouter dashboard retention alone.
 `Broadcast` is not required for this workflow.
 Pass `--no-openrouter-archive` to `bench:run` only if you explicitly want to skip the automatic archive step.
-
-### Translate scenarios or run multilingual sweeps
-
-```bash
-pnpm bench:translate --locales=en,ro --out-dir=locale-packs
-pnpm bench:run-multilingual --models=gpt-5.5,claude-opus-4.7 --locales=en,ro,fr
-```
-
-Use locale packs when you want the same canonical scenario set evaluated across multiple prompt languages while preserving canonical scenario IDs and source-locale metadata.
 
 ### Rerun failed prompts from a previous run
 
@@ -397,7 +375,6 @@ const manifest = await runBenchmarkRequest({
   modelIds: ["deepseek-v3.2"],
   replicates: 3,
   experimentId: "release-eval-2026-03-27",
-  localePreset: "en",
 })
 
 validateRun(manifest)
@@ -433,7 +410,6 @@ Each result row includes:
 - transport metadata (`endpointUsed`, `transportAttempts`, `finishReason`, `providerMetadata`)
 - telemetry metadata (`promptTokenCount`, `responseTokenCount`, `reasoningTokenCount`, `totalTokenCount`, `modelUsage`, `judgeUsage`, `totalUsage`, `estimatedCostUsd`, `timing`)
 - replicate and experiment metadata (`replicate`, `experimentId`)
-- locale metadata (`promptLocale`, `sourceLocale`, `localePackId`)
 - trace metadata (`sampleId`, `attemptId`, `promptHash`, `responseHash`, `judgePanelConfigSnapshot`, `artifactLineage`)
 - governance metadata (`scenarioSplit`, `scenarioSensitivityTier`, `canaryTokens`)
 - optional auxiliary labels for richer refusal analysis
@@ -455,7 +431,6 @@ Results UI behavior:
 - `Aggregate`, each registered module tab, `Per Scenario`, and `Per Prompt` always use stateful escalation runs.
 - `Per Prompt (No Escalation)` is the only isolated/stateless view and always reads `benchmark-results-stateless.json`.
 - Only one stateful run selector is shown in the embedded results UI.
-- Locale-aware charts are available when the active run contains locale-tagged rows.
 
 `next.config.mjs` keeps image optimization disabled for static assets, and `vercel.json` sets security/cache headers for app and data assets.
 

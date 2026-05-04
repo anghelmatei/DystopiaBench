@@ -4,12 +4,10 @@ type GenerationConfig = {
   model: {
     temperature: number
     topP?: number
-    maxOutputTokens: number
   }
   judge: {
     temperature: number
     topP?: number
-    maxOutputTokens: number
   }
   retryPolicy: {
     maxRetries: number
@@ -134,10 +132,9 @@ export function MethodologySection({
             In stateful mode, each scenario-model pair is evaluated in a single conversation with prompts ordered from L1 to L5, so later turns inherit prior context until a hard model failure resets the thread.
             An optional stateless mode runs each level in isolation (no prior context) for ablation studies.
             Transport follows <span className="text-muted-foreground">{transportPolicy}</span>: the primary chat pathway is attempted first,
-            with fallback to OpenRouter Chat Completions when the primary path yields a transport mismatch, timeout, or empty output.
+            with fallback to OpenRouter Chat Completions when the primary path yields a transport mismatch or timeout.
             OpenRouter requests are attributed with app/session headers so provider-side logs can be correlated back to benchmark rows when response metadata is available.
             The current precision policy is <span className="text-muted-foreground">{providerPrecisionPolicy}</span> for open-weight benchmark model calls routed through OpenRouter.
-            Scenario packs can also be localized before execution, so the same scenario can be evaluated across multiple prompt locales while preserving a canonical source ID.
           </p>
         </div>
 
@@ -147,11 +144,9 @@ export function MethodologySection({
           </h5>
           <p>
             Model generation is fixed at <span className="text-muted-foreground">temperature={generationConfig.model.temperature}</span>,
-            <span className="text-muted-foreground"> top_p={generationConfig.model.topP ?? 1}</span>, and
-            <span className="text-muted-foreground"> max_tokens={generationConfig.model.maxOutputTokens}</span>.
+            <span className="text-muted-foreground"> top_p={generationConfig.model.topP ?? 1}</span>, with no benchmark-imposed completion token cap.
             Judge generation is fixed at <span className="text-muted-foreground">temperature={generationConfig.judge.temperature}</span>,
-            <span className="text-muted-foreground"> top_p={generationConfig.judge.topP ?? 1}</span>, and
-            <span className="text-muted-foreground"> max_tokens={generationConfig.judge.maxOutputTokens}</span>.
+            <span className="text-muted-foreground"> top_p={generationConfig.judge.topP ?? 1}</span>, with no benchmark-imposed completion token cap.
             Timeout is set to <span className="text-muted-foreground">{generationConfig.timeoutMs}ms</span> with retry policy
             <span className="text-muted-foreground"> maxRetries={generationConfig.retryPolicy.maxRetries}</span>,
             <span className="text-muted-foreground"> backoffBaseMs={generationConfig.retryPolicy.backoffBaseMs}</span>, and
@@ -203,11 +198,10 @@ export function MethodologySection({
             <span className="text-muted-foreground"> judge_error</span>,
             <span className="text-muted-foreground"> aborted</span>, or
             <span className="text-muted-foreground"> invalid_response</span>.
-            Empty completions after retries are recorded as
-            <span className="text-muted-foreground"> ok</span> with
-            <span className="text-muted-foreground"> refusal</span>, plus
-            <span className="text-muted-foreground"> EMPTY_MODEL_RESPONSE</span> and
-            <span className="text-muted-foreground"> implicitRefusalFromEmpty=true</span> for auditability.
+            Empty completions with provider safety blocks or near-zero stopped output are recorded as silent refusals.
+            Empty completions that consumed output or reasoning tokens without final answer text are recorded as
+            <span className="text-muted-foreground"> invalid_response</span> with
+            <span className="text-muted-foreground"> EMPTY_GENERATED_COMPLETION</span> so they are rerun instead of counted as refusals.
             The rerun utility <span className="text-muted-foreground">bench:rerun-failures</span> supports targeted reruns
             (<span className="text-muted-foreground">to-max-failed</span>, <span className="text-muted-foreground">all-levels</span>, or{" "}
             <span className="text-muted-foreground">failed-only</span>) by writing a new derived manifest with provenance back to the source run instead of mutating historical artifacts.
@@ -217,13 +211,12 @@ export function MethodologySection({
 
         <div className="space-y-2">
           <h5 className="font-sans text-sm font-semibold tracking-normal text-foreground">
-            7. Bundles, multilingual coverage, and run telemetry
+            7. Bundles and run telemetry
           </h5>
           <p>
-            DystopiaBench also supports benchmark bundles, scenario-source provenance, locale packs, and per-run
+            DystopiaBench also supports benchmark bundles, scenario-source provenance, and per-run
             telemetry for lab workflows. Bundle metadata tracks split, release tier, review status, contamination
-            notes, and citations. Multilingual tooling can translate or author locale packs and run the same benchmark
-            across several prompt languages. Run artifacts now record token usage, reasoning-vs-text output tokens,
+            notes, and citations. Run artifacts now record token usage, reasoning-vs-text output tokens,
             estimated cost, and timing data so performance and spend can be audited alongside safety scores.
           </p>
         </div>

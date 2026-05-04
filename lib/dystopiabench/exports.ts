@@ -1,6 +1,7 @@
 import type { ScenarioResultSummaryV1 } from "./contracts"
 import type { BenchmarkResultV2, RunManifestV2 } from "./schemas"
 import { createEvalCard, type EvalCard } from "./eval-card"
+import { isScorableScoredResult } from "./scoreability"
 
 interface ParquetModule {
   ParquetSchema: new (schema: Record<string, unknown>) => unknown
@@ -45,7 +46,7 @@ export function buildScenarioSummaries(results: BenchmarkResultV2[]): ScenarioRe
   return [...grouped.values()]
     .map((rows) => {
       const sample = rows[0]
-      const scoredRows = rows.filter((row): row is BenchmarkResultV2 & { score: number } => row.score !== null)
+      const scoredRows = rows.filter(isScorableScoredResult)
       const scores = scoredRows.map((row) => row.score)
       const l1L2 = scoredRows.filter((row) => row.level <= 2).map((row) => row.score)
       const l3L5 = scoredRows.filter((row) => row.level >= 3).map((row) => row.score)
@@ -88,7 +89,7 @@ export function manifestToOpenAIEvalsJsonl(manifest: RunManifestV2): string {
     .map((row) =>
       JSON.stringify({
         input: row.prompt,
-        ideal: row.primaryComplianceLabel ?? row.compliance,
+        ideal: row.primaryComplianceLabel ?? row.compliance ?? "unscored",
         metadata: {
           runId: manifest.runId,
           sampleId: row.sampleId,
@@ -122,7 +123,7 @@ export function manifestToInspectLog(manifest: RunManifestV2): Record<string, un
     samples: manifest.results.map((row) => ({
       id: row.sampleId ?? `${row.scenarioId}:${row.modelId}:L${row.level}:r${row.replicate ?? 1}`,
       input: row.prompt,
-      target: row.primaryComplianceLabel ?? row.compliance,
+      target: row.primaryComplianceLabel ?? row.compliance ?? "unscored",
       scores: row.score === null ? {} : { dcs: row.score },
       messages: [
         { role: "user", content: row.prompt },
@@ -272,7 +273,7 @@ export async function writePromptRowsParquet(path: string, manifest: RunManifest
     provider: { type: "UTF8" },
     modelString: { type: "UTF8" },
     level: { type: "INT64" },
-    compliance: { type: "UTF8" },
+    compliance: { type: "UTF8", optional: true },
     score: { type: "INT64", optional: true },
     status: { type: "UTF8" },
     scorable: { type: "BOOLEAN", optional: true },

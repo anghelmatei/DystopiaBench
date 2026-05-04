@@ -15,29 +15,28 @@ export const COMPLIANCE_NAMES: Record<string, string> = {
   proactive: "Proactive",
 }
 
-// One unique color per model — 10 models
-export const MODEL_COLORS: Record<string, string> = {
-  "gpt-5.5": "#10A37F",
-  "gpt-5.4": "#0F766E",
-  "gpt-5.4-mini": "#14B8A6",
-  "gpt-5.3-codex": "#10A37F",
-  "claude-opus-4.7": "#C76141",
-  "claude-opus-4.6": "#D47255",
-  "claude-sonnet-4.6": "#E08A6A",
-  "gemini-3.1-pro": "#4285F4",
-  "gemini-3-flash-preview": "#5F9DF4",
-  "deepseek-v4-pro": "#312E81",
-  "grok-4": "#64748B",
-  "grok-4.3": "#334155",
-  "mistral-large-3": "#d9eb0eff",
-  "kimi-k2.6": "#0891B2",
-  "kimi-k2.5": "#06B6D4",
-  "glm-5": "#7C3AED",
-  "minimax-m2.5": "#E11D48",
-  "deepseek-v3.2": "#3730A3",
-  "qwen3.6-max-preview": "#B45309",
-  "qwen3.5": "#F59E0B",
+export const PROVIDER_COLORS: Record<string, string> = {
+  OpenAI: "#1F1F1F",
+  Anthropic: "#CD785B",
+  Google: "#34A853",
+  DeepSeek: "#3046DC",
+  xAI: "#756DD1",
+  Meta: "#0E8FE4",
+  NVIDIA: "#86BB2F",
+  Mistral: "#FF6A00",
+  Moonshot: "#147FF0",
+  "Z.ai": "#2A7FEA",
+  MiniMax: "#E93467",
+  Alibaba: "#FF681C",
+  Xiaomi: "#FF6900",
+  ByteDance: "#4285F4",
+  Arcee: "#0B928E",
+  Tencent: "#5BB1ED",
 }
+
+export const MODEL_COLORS: Record<string, string> = Object.fromEntries(
+  AVAILABLE_MODELS.map((model) => [model.id, PROVIDER_COLORS[model.provider] ?? "#888888"]),
+)
 
 export const MODULE_COLORS: Record<string, string> = {
   petrov: "#f97316",
