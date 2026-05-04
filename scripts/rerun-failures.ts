@@ -10,7 +10,9 @@ import {
   runBenchmark,
   summarizeResults,
   type ConversationMode,
+  type OpenRouterProviderRoutingOverride,
   type RunBenchmarkOptions,
+  type SchedulerMode,
   type TransportPolicy,
 } from "../lib/dystopiabench/runner"
 import {
@@ -23,17 +25,26 @@ import {
 import { buildScenarioSelectionMetadata } from "../lib/dystopiabench/scenario-manifest"
 import { SCENARIO_CATALOG_VERSION } from "../lib/dystopiabench/scenarios"
 import { toModuleId, type Module } from "../lib/dystopiabench/types"
+import { getModelById } from "../lib/dystopiabench/models"
+import { parseModelIdentifier } from "../lib/dystopiabench/model-selectors"
 
 type RerunSource = "latest" | "run"
-type RerunScope = "to-max-failed" | "all-levels" | "failed-only"
+type RerunScope = "from-first-failed" | "to-max-failed" | "all-levels" | "failed-only"
 type EscalationLevel = 1 | 2 | 3 | 4 | 5
 
 interface FailedPairPlan {
   scenarioId: string
   modelId: string
+  replicate: number
   module: Module
   failedLevels: EscalationLevel[]
   rerunLevels: EscalationLevel[]
+}
+
+interface PlanFilters {
+  includeModelIds?: Set<string>
+  excludeModelIds?: Set<string>
+  maxPairs?: number
 }
 
 const ALL_LEVELS: EscalationLevel[] = [1, 2, 3, 4, 5]
@@ -65,15 +76,149 @@ function parseSource(runId: string | undefined): RerunSource {
 
 function parseScope(): RerunScope {
   const input = parseArg("--scope")
-  if (!input) return "to-max-failed"
-  if (input === "to-max-failed" || input === "all-levels" || input === "failed-only") return input
-  throw new Error("Invalid --scope value. Use one of: to-max-failed, all-levels, failed-only.")
+  if (!input) return "from-first-failed"
+  if (input === "from-first-failed" || input === "to-max-failed" || input === "all-levels" || input === "failed-only") return input
+  throw new Error("Invalid --scope value. Use one of: from-first-failed, to-max-failed, all-levels, failed-only.")
 }
 
 function parseRunId(): string | undefined {
   const input = parseArg("--run-id")
   if (!input) return undefined
   return sanitizeRunId(input)
+}
+
+function normalizeModelInputList(input: string | undefined): string[] {
+  if (!input) return []
+  return input
+    .split(/[\s,]+/)
+    .map((value) => value.trim())
+    .filter(Boolean)
+}
+
+function isValidModelSpecifier(input: string): boolean {
+  if (getModelById(input)) return true
+  if (input.startsWith("openrouter:") || input.startsWith("local:")) return true
+  return input.includes("/")
+}
+
+function parseChatFirstModelIds(input: string | undefined): string[] | undefined {
+  if (!input) return undefined
+  const requested = normalizeModelInputList(input)
+  const invalid = requested.filter((id) => !isValidModelSpecifier(id))
+  if (invalid.length > 0) {
+    throw new Error(`Unknown chat-first model id(s): ${invalid.join(", ")}`)
+  }
+  return Array.from(new Set(requested))
+}
+
+function parseModelIdSet(flag: string): Set<string> | undefined {
+  const requested = normalizeModelInputList(parseArg(flag))
+  if (requested.length === 0) return undefined
+  const invalid = requested.filter((id) => !isValidModelSpecifier(id))
+  if (invalid.length > 0) {
+    throw new Error(`Unknown ${flag} model id(s): ${invalid.join(", ")}`)
+  }
+  return new Set(requested)
+}
+
+function parseTransport(input: string | undefined): TransportPolicy | undefined {
+  if (!input) return undefined
+  if (input === "chat-first-fallback" || input === "chat-only") return input
+  throw new Error("Invalid --transport value. Use one of: chat-first-fallback, chat-only.")
+}
+
+function parseProviderOrderOverrides(input: string | undefined): Map<string, OpenRouterProviderRoutingOverride> {
+  const overrides = new Map<string, OpenRouterProviderRoutingOverride>()
+  if (!input) return overrides
+
+  for (const rawEntry of input.split(",")) {
+    const entry = rawEntry.trim()
+    if (!entry) continue
+
+    const separatorIndex = entry.indexOf("=")
+    if (separatorIndex <= 0 || separatorIndex === entry.length - 1) {
+      throw new Error("Invalid --provider-order entry. Use model=Provider|Provider.")
+    }
+
+    const modelInput = entry.slice(0, separatorIndex).trim()
+    const providerOrder = entry
+      .slice(separatorIndex + 1)
+      .split("|")
+      .map((provider) => provider.trim())
+      .filter(Boolean)
+
+    if (providerOrder.length === 0) {
+      throw new Error(`Invalid --provider-order entry for ${modelInput}: missing provider list.`)
+    }
+
+    const model = parseModelIdentifier(modelInput)
+    if (model.backend !== "openrouter") {
+      throw new Error(`Provider routing is only supported for OpenRouter models: ${modelInput}`)
+    }
+
+    overrides.set(model.modelString, {
+      order: providerOrder as NonNullable<OpenRouterProviderRoutingOverride["order"]>,
+      allowFallbacks: true,
+    })
+  }
+
+  return overrides
+}
+
+function isRecoverableProviderProcessError(reason: unknown): boolean {
+  const searchable = reason instanceof Error
+    ? [
+        reason.name,
+        reason.message,
+        String((reason as { code?: unknown }).code ?? ""),
+        String((reason as { cause?: { code?: unknown; message?: unknown } }).cause?.code ?? ""),
+        String((reason as { cause?: { code?: unknown; message?: unknown } }).cause?.message ?? ""),
+      ].join(" ")
+    : String(reason)
+  const normalized = searchable.toLowerCase()
+  return [
+    "timeout",
+    "aborterror",
+    "operation was aborted",
+    "this operation was aborted",
+    "aborted",
+    "terminated",
+    "etimedout",
+    "und_err_socket",
+    "other side closed",
+    "socket closed",
+    "fetch failed",
+    "econnreset",
+  ].some((pattern) => normalized.includes(pattern))
+}
+
+function formatProcessError(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason)
+}
+
+function installRecoverableProviderErrorHandlers(): void {
+  const handleUnhandledRejection = (reason: unknown) => {
+    if (isRecoverableProviderProcessError(reason)) {
+      console.warn(`\nBENCH Recovered async provider error ${formatProcessError(reason)}`)
+      return
+    }
+
+    process.off("unhandledRejection", handleUnhandledRejection)
+    throw reason instanceof Error ? reason : new Error(String(reason))
+  }
+
+  const handleUncaughtException = (reason: Error) => {
+    if (isRecoverableProviderProcessError(reason)) {
+      console.warn(`\nBENCH Recovered async provider exception ${formatProcessError(reason)}`)
+      return
+    }
+
+    process.off("uncaughtException", handleUncaughtException)
+    throw reason
+  }
+
+  process.on("unhandledRejection", handleUnhandledRejection)
+  process.on("uncaughtException", handleUncaughtException)
 }
 
 function parsePositiveIntFlag(flag: string, input: string | undefined): number | undefined {
@@ -113,12 +258,12 @@ function parseRuntimeOverrides(): Pick<
   }
 }
 
-function resultKey(row: Pick<BenchmarkResultV2, "scenarioId" | "modelId" | "level">): string {
-  return `${row.scenarioId}::${row.modelId}::${row.level}`
+function resultKey(row: Pick<BenchmarkResultV2, "scenarioId" | "modelId" | "level" | "replicate" | "sampleId">): string {
+  return row.sampleId ?? `${row.scenarioId}::${row.modelId}::${row.level}::r${row.replicate ?? 1}`
 }
 
-function pairKey(row: Pick<BenchmarkResultV2, "scenarioId" | "modelId">): string {
-  return `${row.scenarioId}::${row.modelId}`
+function pairKey(row: Pick<BenchmarkResultV2, "scenarioId" | "modelId" | "replicate">): string {
+  return `${row.scenarioId}::${row.modelId}::r${row.replicate ?? 1}`
 }
 
 function isFailedRow(row: BenchmarkResultV2): boolean {
@@ -135,8 +280,41 @@ function toSortedLevels(levels: Iterable<number>): EscalationLevel[] {
 function buildRerunLevels(scope: RerunScope, failedLevels: EscalationLevel[]): EscalationLevel[] {
   if (scope === "all-levels") return [...ALL_LEVELS]
   if (scope === "failed-only") return [...failedLevels]
+  if (scope === "from-first-failed") {
+    const firstFailed = Math.min(...failedLevels)
+    return ALL_LEVELS.filter((level) => level >= firstFailed)
+  }
   const maxFailed = Math.max(...failedLevels)
   return ALL_LEVELS.filter((level) => level <= maxFailed)
+}
+
+function buildStatefulPrefixRows(manifest: RunManifestV2, plan: FailedPairPlan): BenchmarkResultV2[] {
+  const firstRerunLevel = Math.min(...plan.rerunLevels)
+  if (firstRerunLevel <= 1) return []
+
+  const rowsByLevel = new Map<EscalationLevel, BenchmarkResultV2>()
+  for (const row of manifest.results) {
+    if (
+      row.scenarioId === plan.scenarioId &&
+      row.modelId === plan.modelId &&
+      (row.replicate ?? 1) === plan.replicate &&
+      row.level < firstRerunLevel &&
+      row.scorable === true
+    ) {
+      rowsByLevel.set(row.level as EscalationLevel, row)
+    }
+  }
+
+  const prefixLevels = ALL_LEVELS.filter((level) => level < firstRerunLevel)
+  const missingPrefixLevels = prefixLevels.filter((level) => !rowsByLevel.has(level))
+  if (missingPrefixLevels.length > 0) {
+    throw new Error(
+      `Cannot rerun ${plan.modelId} | ${plan.scenarioId} | r${plan.replicate} from L${firstRerunLevel}; ` +
+      `missing clean prefix level(s): L${missingPrefixLevels.join(",L")}. Use --scope=all-levels for this pair.`
+    )
+  }
+
+  return prefixLevels.map((level) => ({ ...rowsByLevel.get(level)! }))
 }
 
 function loadBaseManifest(source: RerunSource, requestedRunId: string | undefined): { manifest: RunManifestV2; sourcePath: string } {
@@ -168,7 +346,7 @@ function loadBaseManifest(source: RerunSource, requestedRunId: string | undefine
   }
 }
 
-function buildPlan(manifest: RunManifestV2, scope: RerunScope): {
+function buildPlan(manifest: RunManifestV2, scope: RerunScope, filters: PlanFilters = {}): {
   failedRows: BenchmarkResultV2[]
   failedKeySet: Set<string>
   plans: FailedPairPlan[]
@@ -186,6 +364,7 @@ function buildPlan(manifest: RunManifestV2, scope: RerunScope): {
       byPair.set(key, {
         scenarioId: row.scenarioId,
         modelId: row.modelId,
+        replicate: row.replicate ?? 1,
         module: toModuleId(row.module),
         failedLevels: [level],
         rerunLevels: [],
@@ -195,7 +374,7 @@ function buildPlan(manifest: RunManifestV2, scope: RerunScope): {
     existing.failedLevels.push(level)
   }
 
-  const plans = Array.from(byPair.values())
+  let plans = Array.from(byPair.values())
     .map((entry) => {
       const failedLevels = toSortedLevels(entry.failedLevels)
       return {
@@ -205,9 +384,23 @@ function buildPlan(manifest: RunManifestV2, scope: RerunScope): {
       }
     })
     .sort((a, b) => {
-      if (a.scenarioId === b.scenarioId) return a.modelId.localeCompare(b.modelId)
+      if (a.scenarioId === b.scenarioId) {
+        const modelDiff = a.modelId.localeCompare(b.modelId)
+        if (modelDiff !== 0) return modelDiff
+        return a.replicate - b.replicate
+      }
       return a.scenarioId.localeCompare(b.scenarioId)
     })
+
+  if (filters.includeModelIds) {
+    plans = plans.filter((plan) => filters.includeModelIds?.has(plan.modelId))
+  }
+  if (filters.excludeModelIds) {
+    plans = plans.filter((plan) => !filters.excludeModelIds?.has(plan.modelId))
+  }
+  if (filters.maxPairs !== undefined) {
+    plans = plans.slice(0, filters.maxPairs)
+  }
 
   const plannedPrompts = plans.reduce((sum, item) => sum + item.rerunLevels.length, 0)
 
@@ -215,7 +408,7 @@ function buildPlan(manifest: RunManifestV2, scope: RerunScope): {
 }
 
 function formatStatusCounts(counts: RunManifestV2["summary"]["statusCounts"]): string {
-  return `ok=${counts.ok}, model_error=${counts.model_error}, judge_error=${counts.judge_error}, aborted=${counts.aborted}, invalid_response=${counts.invalid_response}`
+  return `ok=${counts.ok}, model_error=${counts.model_error}, judge_error=${counts.judge_error}, aborted=${counts.aborted}, invalid_response=${counts.invalid_response}, skipped=${counts.skipped ?? 0}`
 }
 
 function ensureUniqueResultKeys(results: BenchmarkResultV2[]): void {
@@ -244,6 +437,11 @@ function resolveConversationMode(
   mode: RunManifestV2["metadata"]["conversationMode"] | undefined,
 ): ConversationMode {
   return mode === "stateless" ? "stateless" : "stateful"
+}
+
+function resolveScheduler(manifest: RunManifestV2): SchedulerMode {
+  const scheduler = manifest.metadata.scheduler ?? manifest.metadata.executionConfig?.scheduler
+  return scheduler === "level-wave" || scheduler === "conversation" ? scheduler : "conversation"
 }
 
 function buildSelectionMetadataFromResults(results: BenchmarkResultV2[]) {
@@ -310,9 +508,23 @@ async function main() {
   const debug = hasFlag("--debug")
   const pairConcurrency = parsePositiveIntFlag("--pair-concurrency", parseArg("--pair-concurrency")) ?? 2
   const runtimeOverrides = parseRuntimeOverrides()
+  const chatFirstModelIdsOverride = parseChatFirstModelIds(parseArg("--chat-first-models"))
+  const transportOverride = parseTransport(parseArg("--transport"))
+  const providerRoutingOverridesByModelString = parseProviderOrderOverrides(parseArg("--provider-order"))
+  const filters: PlanFilters = {
+    includeModelIds: parseModelIdSet("--models"),
+    excludeModelIds: parseModelIdSet("--exclude-models"),
+    maxPairs: parsePositiveIntFlag("--max-pairs", parseArg("--max-pairs")),
+  }
 
   const { manifest: baseManifest, sourcePath } = loadBaseManifest(source, requestedRunId)
-  const { failedRows, plans, plannedPrompts } = buildPlan(baseManifest, scope)
+  const fallbackOnTimeout = hasFlag("--no-timeout-fallback")
+    ? false
+    : baseManifest.metadata.fallbackOnTimeout
+      ?? baseManifest.metadata.executionConfig?.fallbackOnTimeout
+      ?? baseManifest.metadata.generationConfig?.fallbackOnTimeout
+      ?? true
+  const { failedRows, plans, plannedPrompts } = buildPlan(baseManifest, scope, filters)
   const derivedRunId = sanitizeRunId(`rerun-${makeRunId()}`)
 
   console.log(`Loaded source: ${sourcePath}`)
@@ -325,6 +537,9 @@ async function main() {
   console.log(`Pair concurrency: ${pairConcurrency}`)
   console.log("Checkpoint mode: enabled (derived run file is updated after each scenario-model pair).")
   if (debug) console.log("Debug logging: enabled")
+  if (filters.includeModelIds) console.log(`Model include filter: ${Array.from(filters.includeModelIds).join(", ")}`)
+  if (filters.excludeModelIds) console.log(`Model exclude filter: ${Array.from(filters.excludeModelIds).join(", ")}`)
+  if (filters.maxPairs !== undefined) console.log(`Max pairs: ${filters.maxPairs}`)
 
   if (runtimeOverrides.timeoutMs !== undefined) console.log(`Timeout override: ${runtimeOverrides.timeoutMs}ms`)
   if (runtimeOverrides.concurrency !== undefined) console.log(`Concurrency override: ${runtimeOverrides.concurrency}`)
@@ -332,10 +547,26 @@ async function main() {
   if (runtimeOverrides.maxRetries !== undefined) console.log(`Retry override: maxRetries=${runtimeOverrides.maxRetries}`)
   if (runtimeOverrides.retryBackoffBaseMs !== undefined) console.log(`Retry backoff base override: ${runtimeOverrides.retryBackoffBaseMs}ms`)
   if (runtimeOverrides.retryBackoffJitterMs !== undefined) console.log(`Retry backoff jitter override: ${runtimeOverrides.retryBackoffJitterMs}ms`)
+  const chatFirstModelIds = chatFirstModelIdsOverride
+    ?? baseManifest.metadata.chatFirstModelIds
+    ?? baseManifest.metadata.executionConfig?.chatFirstModelIds
+    ?? []
+  const transportPolicy = transportOverride ?? ((baseManifest.metadata.transportPolicy ?? "chat-first-fallback") as TransportPolicy)
+  if (chatFirstModelIds.length > 0) console.log(`Chat-first models: ${chatFirstModelIds.join(", ")}`)
+  console.log(`Transport: ${transportPolicy}`)
+  console.log(`Timeout fallback: ${fallbackOnTimeout ? "yes" : "no"}`)
+  if (providerRoutingOverridesByModelString.size > 0) {
+    console.log(
+      `Provider order overrides: ${Array.from(providerRoutingOverridesByModelString.entries())
+        .map(([modelString, override]) => `${modelString}=${override.order?.join("|")}`)
+        .join(", ")}`
+    )
+  }
 
   for (const plan of plans) {
     console.log(
       `  - ${plan.modelId} | ${plan.scenarioId} | failed L${plan.failedLevels.join(",L")} | rerun L${plan.rerunLevels.join(",L")}`
+        + ` | replicate ${plan.replicate}`
     )
   }
 
@@ -363,33 +594,48 @@ async function main() {
     limit(async () => {
       const startedAt = Date.now()
       console.log(
-        `[Rerun ${index + 1}/${plans.length}] ${plan.modelId} | ${plan.scenarioId} | levels=${plan.rerunLevels.join(",")}`
+        `[Rerun ${index + 1}/${plans.length}] ${plan.modelId} | ${plan.scenarioId} | r${plan.replicate} | levels=${plan.rerunLevels.join(",")}`
       )
 
       let rerun: RunManifestV2
       try {
+        const statefulPrefixRows =
+          resolveConversationMode(workingManifest.metadata.conversationMode) === "stateful"
+            ? buildStatefulPrefixRows(workingManifest, plan)
+            : []
+        const levelsToExecute = Array.from(
+          new Set([
+            ...statefulPrefixRows.map((row) => row.level as EscalationLevel),
+            ...plan.rerunLevels,
+          ])
+        ).sort((a, b) => a - b) as EscalationLevel[]
+
         rerun = await runBenchmark({
           runId: sanitizeRunId(`rerun-${Date.now()}-${index + 1}`),
           module: plan.module,
           scenarioIds: [plan.scenarioId],
           modelIds: [plan.modelId],
-          levels: plan.rerunLevels,
+          levels: levelsToExecute,
           judgeModel: workingManifest.metadata.judgeModel,
-          judgeModels:
-            (workingManifest.metadata.judgeStrategy ?? "single") === "single"
-              ? workingManifest.metadata.judgeModels ?? [workingManifest.metadata.judgeModel]
-              : undefined,
+          judgeModels: workingManifest.metadata.judgeModels ?? [workingManifest.metadata.judgeModel],
           judgeStrategy: workingManifest.metadata.judgeStrategy,
-          transportPolicy: (workingManifest.metadata.transportPolicy ?? "chat-first-fallback") as TransportPolicy,
+          transportPolicy,
+          chatFirstModelIds,
+          fallbackOnTimeout,
           conversationMode: resolveConversationMode(workingManifest.metadata.conversationMode),
+          scheduler: resolveScheduler(workingManifest),
           providerPrecisionPolicy: workingManifest.metadata.providerPrecisionPolicy,
+          providerRoutingOverridesByModelString,
           skipModelValidation: true,
+          existingResults: statefulPrefixRows,
           concurrency: runtimeOverrides.concurrency ?? 1,
           perModelConcurrency: runtimeOverrides.perModelConcurrency ?? 1,
           timeoutMs: runtimeOverrides.timeoutMs,
           maxRetries: runtimeOverrides.maxRetries,
           retryBackoffBaseMs: runtimeOverrides.retryBackoffBaseMs,
           retryBackoffJitterMs: runtimeOverrides.retryBackoffJitterMs,
+          replicates: plan.replicate,
+          selectedReplicates: [plan.replicate],
         })
       } catch (error) {
         pairRunFailures += 1
@@ -399,7 +645,8 @@ async function main() {
         return
       }
 
-      const rerunFailedRows = rerun.results.filter(isFailedRow)
+      const rerunRowsForReplicate = rerun.results.filter((row) => (row.replicate ?? 1) === plan.replicate)
+      const rerunFailedRows = rerunRowsForReplicate.filter(isFailedRow)
       if (rerunFailedRows.length > 0) {
         console.warn(`  Pair still has ${rerunFailedRows.length} failed row(s) after rerun.`)
         for (const row of rerunFailedRows) {
@@ -409,7 +656,7 @@ async function main() {
 
       await mergeLimit(async () => {
         const replacementByKey = new Map<string, BenchmarkResultV2>()
-        for (const row of rerun.results) {
+        for (const row of rerunRowsForReplicate) {
           replacementByKey.set(resultKey(row), row)
         }
 
@@ -446,7 +693,11 @@ async function main() {
         completedPairs += 1
 
         const pairStillFailed = workingManifest.results.filter(
-          (row) => row.scenarioId === plan.scenarioId && row.modelId === plan.modelId && isFailedRow(row)
+          (row) =>
+            row.scenarioId === plan.scenarioId &&
+            row.modelId === plan.modelId &&
+            (row.replicate ?? 1) === plan.replicate &&
+            isFailedRow(row)
         ).length
         const elapsedSec = Math.round((Date.now() - startedAt) / 1000)
         console.log(
@@ -485,6 +736,8 @@ async function main() {
     }
   }
 }
+
+installRecoverableProviderErrorHandlers()
 
 main().catch((error) => {
   console.error(error instanceof Error ? error.message : error)

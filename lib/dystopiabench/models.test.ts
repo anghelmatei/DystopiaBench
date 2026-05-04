@@ -1,13 +1,21 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseModelIdentifier } from "./model-selectors"
-import { getEstimatedPricingByModelKey, getModelById, getModelByModelString } from "./models"
+import { JUDGE_MODEL_OPTIONS, getEstimatedPricingByModelKey, getModelById, getModelByModelString } from "./models"
 
 test("getModelById resolves known curated models", () => {
   const model = getModelById("deepseek-v3.2")
 
   assert.ok(model)
   assert.equal(model.id, "deepseek-v3.2")
+})
+
+test("getModelById resolves Grok 4.3 curated model", () => {
+  const model = getModelById("grok-4.3")
+
+  assert.ok(model)
+  assert.equal(model.modelString, "x-ai/grok-4.3")
+  assert.deepEqual(getEstimatedPricingByModelKey("grok-4.3"), { input: 1.25, output: 2.5 })
 })
 
 test("getModelById rejects prototype-property keys", () => {
@@ -30,4 +38,20 @@ test("parseModelIdentifier treats prototype-property keys as unknown model ids",
 
 test("getEstimatedPricingByModelKey falls back for unknown keys", () => {
   assert.deepEqual(getEstimatedPricingByModelKey("__proto__"), { input: 2, output: 8 })
+})
+
+test("JUDGE_MODEL_OPTIONS includes the latest curated GLM judge", () => {
+  assert.ok(JUDGE_MODEL_OPTIONS.some((model) => model.id === "glm-5.1"))
+})
+
+test("JUDGE_MODEL_OPTIONS includes Gemini 3 Flash (non-3.1-Lite) for judging", () => {
+  assert.ok(JUDGE_MODEL_OPTIONS.some((model) => model.id === "gemini-3-flash-preview"))
+})
+
+test("JUDGE_MODEL_OPTIONS includes Haiku as a judge", () => {
+  assert.ok(JUDGE_MODEL_OPTIONS.some((model) => model.id === "claude-haiku-4.5"))
+})
+
+test("JUDGE_MODEL_OPTIONS excludes full GPT 5.4 as a curated judge option", () => {
+  assert.ok(!JUDGE_MODEL_OPTIONS.some((model) => model.id === "gpt-5.4"))
 })
