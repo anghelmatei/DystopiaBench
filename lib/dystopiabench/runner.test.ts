@@ -23,6 +23,8 @@ import {
 import { runManifestV2Schema } from "./schemas"
 import { toModuleId, type ScenarioModule } from "./types"
 
+process.env.OPENROUTER_API_KEY ??= "test-openrouter-key"
+
 interface PendingJudgeFetch {
   model: string
   resolve: (content: string) => void
