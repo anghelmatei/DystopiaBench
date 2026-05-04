@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
+import { pathToFileURL } from "node:url"
 import {
   ALL_MODULES,
   ALL_SCENARIOS,
@@ -133,8 +134,6 @@ function normalizeGenerationConfig(metadata: RunMetadataV2) {
   return {
     model: config.model,
     judge: config.judge,
-    retryPolicy: config.retryPolicy,
-    timeoutMs: config.timeoutMs,
   }
 }
 
@@ -154,8 +153,8 @@ function mergeCapabilities(
   }
 }
 
-function resultKey(result: BenchmarkResultV2): string {
-  return `${result.scenarioId}::${result.modelId}::${result.level}`
+function resultKey(result: Pick<BenchmarkResultV2, "scenarioId" | "modelId" | "level" | "replicate" | "sampleId">): string {
+  return result.sampleId ?? `${result.scenarioId}::${result.modelId}::${result.level}::r${result.replicate ?? 1}`
 }
 
 function getScenarioOrder(scenarioId: string): number {
@@ -180,25 +179,42 @@ function sortResults(results: BenchmarkResultV2[], modelOrder: string[]): Benchm
     const levelDiff = left.level - right.level
     if (levelDiff !== 0) return levelDiff
 
+    const replicateDiff = (left.replicate ?? 1) - (right.replicate ?? 1)
+    if (replicateDiff !== 0) return replicateDiff
+
     return left.timestamp - right.timestamp
   })
 }
 
-function main() {
-  const baseRunId = sanitizeRunId(getRequiredArg("--base-run-id"))
-  const patchRunId = sanitizeRunId(getRequiredArg("--patch-run-id"))
-  const runId = sanitizeRunId(parseArg("--run-id") ?? `merge-${makeRunId()}`)
-  const publish = hasFlag("--publish")
-  const retainRuns = parseRetainRuns(parseArg("--retain"))
-  const archiveDir = parseArchiveDir(parseArg("--archive-dir"))
+export interface MergeRunManifestsOptions {
+  runId: string
+  allowAdditiveModels?: boolean
+  now?: Date
+}
 
-  if (!publish && (retainRuns !== undefined || archiveDir !== undefined)) {
-    throw new Error("--retain and --archive-dir require --publish.")
+function normalizeScenarioCatalogVersion(metadata: RunMetadataV2): string | undefined {
+  return metadata.scenarioCatalogVersion ?? metadata.benchmarkDefinition?.scenarioCatalogVersion
+}
+
+function assertNoOverlappingResultKeys(base: RunManifestV2, patch: RunManifestV2): void {
+  const baseKeys = new Set(base.results.map(resultKey))
+  const overlappingKeys = patch.results
+    .map(resultKey)
+    .filter((key) => baseKeys.has(key))
+
+  if (overlappingKeys.length > 0) {
+    throw new Error(
+      `Patch run overlaps ${overlappingKeys.length} existing result key(s). ` +
+      "Additive model merge only supports new model rows."
+    )
   }
+}
 
-  const base = loadManifest(baseRunId)
-  const patch = loadManifest(patchRunId)
-
+export function mergeRunManifests(
+  base: RunManifestV2,
+  patch: RunManifestV2,
+  options: MergeRunManifestsOptions,
+): RunManifestV2 {
   const baseMode = normalizeConversationMode(base.metadata)
   const patchMode = normalizeConversationMode(patch.metadata)
   assertEqual("conversationMode", baseMode, patchMode)
@@ -213,8 +229,13 @@ function main() {
   assertEqual("benchmarkPromptVersion", base.metadata.benchmarkPromptVersion, patch.metadata.benchmarkPromptVersion)
   assertEqual("judgePromptVersion", base.metadata.judgePromptVersion, patch.metadata.judgePromptVersion)
   assertEqual("levels", unique(base.metadata.levels).sort(), unique(patch.metadata.levels).sort())
-  assertEqual("models", unique(base.metadata.models), unique(patch.metadata.models))
-  assertEqual("transportPolicy", base.metadata.transportPolicy, patch.metadata.transportPolicy)
+  assertEqual("sourceLocale", base.metadata.sourceLocale, patch.metadata.sourceLocale)
+  assertEqual("promptLocale", base.metadata.promptLocale, patch.metadata.promptLocale)
+  assertEqual(
+    "scenarioCatalogVersion",
+    normalizeScenarioCatalogVersion(base.metadata),
+    normalizeScenarioCatalogVersion(patch.metadata),
+  )
   assertEqual(
     "providerPrecisionPolicy",
     normalizeProviderPrecisionPolicy(base.metadata),
@@ -226,6 +247,14 @@ function main() {
     normalizeGenerationConfig(patch.metadata),
   )
 
+  const baseModels = unique(base.metadata.models)
+  const patchModels = unique(patch.metadata.models)
+  if (options.allowAdditiveModels) {
+    assertNoOverlappingResultKeys(base, patch)
+  } else {
+    assertEqual("models", baseModels, patchModels)
+  }
+
   const mergedResultsByKey = new Map<string, BenchmarkResultV2>()
   for (const result of base.results) {
     mergedResultsByKey.set(resultKey(result), result)
@@ -234,7 +263,7 @@ function main() {
     mergedResultsByKey.set(resultKey(result), result)
   }
 
-  const mergedModels = unique([...base.metadata.models, ...patch.metadata.models])
+  const mergedModels = unique([...baseModels, ...patchModels])
   const mergedResults = sortResults([...mergedResultsByKey.values()], mergedModels)
 
   const selectedScenarioIds = ALL_SCENARIOS
@@ -276,6 +305,8 @@ function main() {
     transportPolicy: base.metadata.transportPolicy,
     conversationMode: baseMode,
     providerPrecisionPolicy: base.metadata.providerPrecisionPolicy,
+    sourceLocale: base.metadata.sourceLocale,
+    promptLocale: base.metadata.promptLocale,
     modelCapabilitiesSnapshot: mergeCapabilities(
       base.metadata.modelCapabilitiesSnapshot,
       patch.metadata.modelCapabilitiesSnapshot,
@@ -283,22 +314,43 @@ function main() {
     generationConfig: base.metadata.generationConfig ?? patch.metadata.generationConfig ?? GENERATION_CONFIG,
   }
 
+  const now = options.now ?? new Date()
   const mergedManifest: RunManifestV2 = {
     schemaVersion: 4,
-    runId,
-    timestamp: Date.now(),
-    date: new Date().toISOString(),
+    runId: options.runId,
+    timestamp: now.getTime(),
+    date: now.toISOString(),
     metadata: mergedMetadata,
     summary: summarizeResults(mergedResults),
     results: mergedResults,
   }
+
+  return mergedManifest
+}
+
+function main() {
+  const baseRunId = sanitizeRunId(getRequiredArg("--base-run-id"))
+  const patchRunId = sanitizeRunId(getRequiredArg("--patch-run-id"))
+  const runId = sanitizeRunId(parseArg("--run-id") ?? `merge-${makeRunId()}`)
+  const publish = hasFlag("--publish")
+  const allowAdditiveModels = hasFlag("--allow-additive-models")
+  const retainRuns = parseRetainRuns(parseArg("--retain"))
+  const archiveDir = parseArchiveDir(parseArg("--archive-dir"))
+
+  if (!publish && (retainRuns !== undefined || archiveDir !== undefined)) {
+    throw new Error("--retain and --archive-dir require --publish.")
+  }
+
+  const base = loadManifest(baseRunId)
+  const patch = loadManifest(patchRunId)
+  const mergedManifest = mergeRunManifests(base, patch, { runId, allowAdditiveModels })
 
   writeRunManifest(mergedManifest)
   console.log(`Wrote merged run: public/data/benchmark-${runId}.json`)
   console.log(`Base run: ${baseRunId}`)
   console.log(`Patch run: ${patchRunId}`)
   console.log(`Merged prompts: ${mergedManifest.summary.totalPrompts}`)
-  console.log(`Merged modules: ${(mergedMetadata.scenarioModuleIds ?? []).join(", ")}`)
+  console.log(`Merged modules: ${(mergedManifest.metadata.scenarioModuleIds ?? []).join(", ")}`)
 
   if (publish) {
     publishLatest(mergedManifest, { retainRuns, archiveDir })
@@ -308,9 +360,11 @@ function main() {
   }
 }
 
-try {
-  main()
-} catch (error) {
-  console.error(error instanceof Error ? error.message : error)
-  process.exitCode = 1
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    main()
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error)
+    process.exitCode = 1
+  }
 }

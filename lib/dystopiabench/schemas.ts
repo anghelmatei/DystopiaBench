@@ -13,17 +13,18 @@ export const benchmarkStatusSchema = z.enum([
   "judge_error",
   "aborted",
   "invalid_response",
+  "skipped",
 ])
 
 export const conversationModeSchema = z.enum(["stateful", "stateless"])
+export const schedulerModeSchema = z.enum(["level-wave", "conversation"])
 export const judgeStrategySchema = z.enum(["single", "pair-with-tiebreak"])
 export const providerPrecisionPolicySchema = z.enum(["default", "non-quantized-only"])
 export const conversationContinuitySchema = z.enum(["intact", "reset_after_failure"])
-export const rerunScopeSchema = z.enum(["to-max-failed", "all-levels", "failed-only"])
+export const rerunScopeSchema = z.enum(["from-first-failed", "to-max-failed", "all-levels", "failed-only"])
 export const derivationKindSchema = z.enum(["rerun_failures", "awareness_analysis"])
 export const auxiliaryOutcomeLabelSchema = z.enum(["none", "weak", "moderate", "strong", "high"])
 export const complianceSeveritySchema = z.enum(["none", "low", "medium", "high", "critical"])
-export const evalAwarenessModeSchema = z.enum(["off", "auto", "required"])
 export const traceAvailabilitySchema = z.enum(["none", "token-only", "summary", "full"])
 export const traceCaptureSourceSchema = z.enum([
   "ai-sdk-reasoning",
@@ -31,8 +32,6 @@ export const traceCaptureSourceSchema = z.enum([
   "provider-metadata",
   "unavailable",
 ])
-export const awarenessAnalysisModeSchema = z.enum(["reasoning+response", "response-only"])
-export const responseTraceConsistencySchema = z.enum(["aligned", "mixed", "conflicted", "unknown"])
 export const adjudicationSourceSchema = z.enum([
   "single-judge",
   "judge-panel",
@@ -41,7 +40,7 @@ export const adjudicationSourceSchema = z.enum([
   "imported-review",
 ])
 export const artifactVisibilitySchema = z.enum(["public", "private"])
-export const endpointUsedSchema = z.enum(["ai_sdk_chat", "openrouter_chat_fallback", "local_chat"])
+export const endpointUsedSchema = z.enum(["ai_sdk_chat", "openrouter_chat_primary", "openrouter_chat_fallback", "local_chat"])
 export const localeTagSchema = z.string().trim().min(2)
 
 export const GENERATION_CONFIG = {
@@ -113,26 +112,6 @@ export const auxiliaryOutcomeLabelsSchema = z.object({
   proceduralDeferral: auxiliaryOutcomeLabelSchema.optional(),
 })
 
-export const evaluationAwarenessEvidenceFlagsSchema = z.object({
-  traceMentionsEvaluation: z.boolean().optional(),
-  traceMentionsPolicyOptics: z.boolean().optional(),
-  responseMentionsEvaluation: z.boolean().optional(),
-  behaviorShiftFlag: z.boolean().optional(),
-  hiddenDeliberationMismatch: z.boolean().optional(),
-})
-
-export const evaluationAwarenessAnalysisSchema = z.object({
-  analysisMode: awarenessAnalysisModeSchema,
-  evaluationAwareness: auxiliaryOutcomeLabelSchema,
-  deceptionSuspicion: auxiliaryOutcomeLabelSchema,
-  responseTraceConsistency: responseTraceConsistencySchema,
-  evidenceFlags: evaluationAwarenessEvidenceFlagsSchema.default({}),
-  analysisReasoning: z.string(),
-  analysisConfidence: z.number().min(0).max(1).optional(),
-  analysisModel: z.string().optional(),
-  heuristicsOnly: z.boolean().optional(),
-})
-
 export const rubricSliceCoverageSchema = z.object({
   slice: z.string(),
   exampleCount: z.number().int().nonnegative(),
@@ -193,16 +172,45 @@ export const repeatStatsSummarySchema = z.object({
   maxWithinTupleStdDev: z.number().nonnegative(),
 })
 
-export const evaluationAwarenessSummarySchema = z.object({
-  traceCoverageRate: z.number().min(0).max(100),
-  traceTextCoverageRate: z.number().min(0).max(100),
+export const tokenUsageSummarySchema = z.object({
+  inputTokens: z.number().int().nonnegative().default(0),
+  cachedInputTokens: z.number().int().nonnegative().default(0),
+  uncachedInputTokens: z.number().int().nonnegative().default(0),
+  outputTokens: z.number().int().nonnegative().default(0),
+  textOutputTokens: z.number().int().nonnegative().default(0),
+  reasoningTokens: z.number().int().nonnegative().default(0),
+  totalTokens: z.number().int().nonnegative().default(0),
+})
+
+export const costBreakdownSchema = z.object({
+  inputUsd: z.number().nonnegative(),
+  outputUsd: z.number().nonnegative(),
+  totalUsd: z.number().nonnegative(),
+})
+
+export const runCostBreakdownSchema = z.object({
+  modelUsd: z.number().nonnegative(),
+  judgeUsd: z.number().nonnegative(),
+  totalUsd: z.number().nonnegative(),
+})
+
+export const rowTimingSchema = z.object({
+  modelLatencyMs: z.number().int().nonnegative(),
+  judgeLatencyMs: z.number().int().nonnegative(),
+  totalLatencyMs: z.number().int().nonnegative(),
+})
+
+export const telemetrySummarySchema = z.object({
+  modelUsage: tokenUsageSummarySchema,
+  judgeUsage: tokenUsageSummarySchema,
+  totalUsage: tokenUsageSummarySchema,
+  estimatedCostUsd: runCostBreakdownSchema,
+  averageModelLatencyMs: z.number().nonnegative(),
+  averageJudgeLatencyMs: z.number().nonnegative(),
+  averageRowLatencyMs: z.number().nonnegative(),
+  runWallTimeMs: z.number().int().nonnegative(),
+  tokenCoverageRate: z.number().min(0).max(100),
   reasoningTokenCoverageRate: z.number().min(0).max(100),
-  evaluationAwarenessRate: z.number().min(0).max(100),
-  deceptionSuspicionRate: z.number().min(0).max(100),
-  responseTraceConflictRate: z.number().min(0).max(100),
-  awarenessByModel: z.record(z.string(), z.number().min(0).max(100)),
-  awarenessByLevel: z.record(z.string(), z.number().min(0).max(100)),
-  deceptionByLevel: z.record(z.string(), z.number().min(0).max(100)),
 })
 
 export const benchmarkResultV2Schema = z.object({
@@ -269,10 +277,18 @@ export const benchmarkResultV2Schema = z.object({
   traceCaptureSource: traceCaptureSourceSchema.optional(),
   reasoningTraceText: z.string().optional(),
   reasoningTokenCount: z.number().int().nonnegative().optional(),
+  promptTokenCount: z.number().int().nonnegative().optional(),
   responseTokenCount: z.number().int().nonnegative().optional(),
-  finishReason: z.string().optional(),
+  totalTokenCount: z.number().int().nonnegative().optional(),
+  modelUsage: tokenUsageSummarySchema.optional(),
+  judgeUsage: tokenUsageSummarySchema.optional(),
+  totalUsage: tokenUsageSummarySchema.optional(),
+  modelEstimatedCostUsd: costBreakdownSchema.optional(),
+  judgeEstimatedCostUsd: costBreakdownSchema.optional(),
+  estimatedCostUsd: runCostBreakdownSchema.optional(),
+  timing: rowTimingSchema.optional(),
+  finishReason: z.string().nullish().transform((value) => value ?? undefined),
   providerMetadata: z.record(z.string(), z.unknown()).optional(),
-  evaluationAwarenessAnalysis: evaluationAwarenessAnalysisSchema.optional(),
   judgePanelConfigSnapshot: judgePanelConfigSnapshotSchema.optional(),
   artifactLineage: z.object({
     sourceRunId: z.string().optional(),
@@ -298,7 +314,7 @@ export const runSummaryV2Schema = z.object({
   riskSlices: riskSlicesSummarySchema.optional(),
   auxiliaryLabelCoverage: auxiliaryLabelCoverageSchema.optional(),
   repeatStats: repeatStatsSummarySchema.optional(),
-  evaluationAwareness: evaluationAwarenessSummarySchema.optional(),
+  telemetry: telemetrySummarySchema.optional(),
   judgeAgreement: judgeAgreementSummarySchema,
   judgeCalibration: judgeCalibrationSummarySchema,
   goldSetValidation: goldSetValidationSummarySchema,
@@ -325,12 +341,15 @@ export const benchmarkDefinitionSchema = z.object({
 
 export const executionConfigSchema = z.object({
   transportPolicy: z.enum(["chat-first-fallback", "chat-only"]).optional(),
+  chatFirstModelIds: z.array(z.string()).optional(),
+  fallbackOnTimeout: z.boolean().optional(),
   conversationMode: conversationModeSchema.optional(),
+  scheduler: schedulerModeSchema.optional(),
   providerPrecisionPolicy: providerPrecisionPolicySchema.optional(),
   timeoutMs: z.number().int().positive(),
   concurrency: z.number().int().positive().optional(),
   perModelConcurrency: z.number().int().positive().optional(),
-  replicates: z.number().int().positive().default(1),
+  replicates: z.number().int().positive().default(3),
   retryPolicy: z.object({
     maxRetries: z.number().int().nonnegative(),
     backoffBaseMs: z.number().int().positive(),
@@ -355,9 +374,6 @@ export const analysisConfigSchema = z.object({
   judgeModels: z.array(z.string()).optional(),
   judgeStrategy: judgeStrategySchema.optional(),
   judgeTieBreakerModel: z.string().optional(),
-  evalAwarenessMode: evalAwarenessModeSchema.optional(),
-  awarenessJudgeModel: z.string().optional(),
-  awarenessThreshold: auxiliaryOutcomeLabelSchema.optional(),
   goldSetValidation: goldSetValidationSummarySchema,
 })
 
@@ -393,7 +409,10 @@ export const runMetadataV2Schema = z.object({
   judgePromptVersion: z.string().default("v1"),
   artifactPolicy: artifactPolicySchema.optional(),
   transportPolicy: z.enum(["chat-first-fallback", "chat-only"]).optional(),
+  chatFirstModelIds: z.array(z.string()).optional(),
+  fallbackOnTimeout: z.boolean().optional(),
   conversationMode: conversationModeSchema.optional(),
+  scheduler: schedulerModeSchema.optional(),
   providerPrecisionPolicy: providerPrecisionPolicySchema.optional(),
   derivedFromRunId: z.string().optional(),
   derivationKind: derivationKindSchema.optional(),
@@ -435,12 +454,15 @@ export const runMetadataV2Schema = z.object({
       timeoutMs: z.number().int().positive(),
       concurrency: z.number().int().positive().optional(),
       perModelConcurrency: z.number().int().positive().optional(),
+      scheduler: schedulerModeSchema.optional(),
+      chatFirstModelIds: z.array(z.string()).optional(),
+      fallbackOnTimeout: z.boolean().optional(),
     })
     .default(GENERATION_CONFIG),
 })
 
 export const runManifestV2Schema = z.object({
-  schemaVersion: z.union([z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6), z.literal(7)]),
+  schemaVersion: z.union([z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6), z.literal(7), z.literal(8)]),
   runId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
   timestamp: z.number().int(),
   date: z.string(),
@@ -462,6 +484,7 @@ export const runIndexV2Schema = z.array(runIndexItemV2Schema)
 export type ComplianceRating = z.infer<typeof complianceRatingSchema>
 export type BenchmarkStatus = z.infer<typeof benchmarkStatusSchema>
 export type ConversationMode = z.infer<typeof conversationModeSchema>
+export type SchedulerMode = z.infer<typeof schedulerModeSchema>
 export type JudgeStrategy = z.infer<typeof judgeStrategySchema>
 export type ProviderPrecisionPolicy = z.infer<typeof providerPrecisionPolicySchema>
 export type ConversationContinuity = z.infer<typeof conversationContinuitySchema>
@@ -470,7 +493,11 @@ export type DerivationKind = z.infer<typeof derivationKindSchema>
 export type JudgeVoteV2 = z.infer<typeof judgeVoteSchema>
 export type JudgePanelRecord = z.infer<typeof judgePanelRecordSchema>
 export type AuxiliaryOutcomeLabels = z.infer<typeof auxiliaryOutcomeLabelsSchema>
-export type EvaluationAwarenessAnalysis = z.infer<typeof evaluationAwarenessAnalysisSchema>
+export type TokenUsageSummary = z.infer<typeof tokenUsageSummarySchema>
+export type CostBreakdown = z.infer<typeof costBreakdownSchema>
+export type RunCostBreakdown = z.infer<typeof runCostBreakdownSchema>
+export type RowTiming = z.infer<typeof rowTimingSchema>
+export type TelemetrySummary = z.infer<typeof telemetrySummarySchema>
 export type BenchmarkResultV2 = z.infer<typeof benchmarkResultV2Schema>
 export type RunSummaryV2 = z.infer<typeof runSummaryV2Schema>
 export type RunMetadataV2 = z.infer<typeof runMetadataV2Schema>

@@ -67,6 +67,8 @@ export function DashboardTabs({
   statefulManifest,
   isolatedManifest,
 }: DashboardTabsProps) {
+  const hasNoResults = statefulResults.length === 0 && isolatedResults.length === 0
+
   const moduleTabs = useMemo(
     () => ALL_MODULES.map((module) => ({
       id: String(module.id),
@@ -87,7 +89,9 @@ export function DashboardTabs({
     [moduleTabs],
   )
 
-  const [activeTab, setActiveTab] = useState<string>("aggregate")
+  const [requestedActiveTab, setActiveTab] = useState<string>(
+    statefulResults.length > 0 ? "aggregate" : "prompt_no_escalation",
+  )
   const [hasInteracted, setHasInteracted] = useState(false)
   const [rawSelectedModelIds, setRawSelectedModelIds] = useState<string[]>([])
 
@@ -113,6 +117,8 @@ export function DashboardTabs({
     [isolatedResults, selectedSet],
   )
 
+  const activeTab =
+    statefulResults.length === 0 && isolatedResults.length > 0 ? "prompt_no_escalation" : requestedActiveTab
   const activeResults = activeTab === "prompt_no_escalation" ? filteredIsolatedResults : filteredStatefulResults
   const scenarioCount = new Set(activeResults.map((row) => row.scenarioId)).size
   const activeManifest = activeTab === "prompt_no_escalation" ? isolatedManifest : statefulManifest
@@ -133,6 +139,24 @@ export function DashboardTabs({
       if (next.length === availableModelIds.length) return []
       return availableModelIds
     })
+  }
+
+  if (hasNoResults) {
+    return (
+      <Card className="border-border bg-card p-6">
+        <p className="mb-3 font-mono text-xs text-muted-foreground uppercase">
+          No published results match the current scenario catalog.
+        </p>
+        <p className="mb-2 text-sm leading-relaxed text-muted-foreground">
+          Historical run manifests are still preserved in <code>public/data/benchmark-*.json</code>. Publish a new
+          full run to repopulate the dashboard.
+        </p>
+        <p className="mb-2 font-mono text-[10px] text-muted-foreground uppercase">Command</p>
+        <code className="block whitespace-pre-wrap font-mono text-xs text-foreground">
+          pnpm bench:run
+        </code>
+      </Card>
+    )
   }
 
   return (
@@ -184,16 +208,16 @@ export function DashboardTabs({
               {activeManifest.metadata.experimentId ?? "not set"}
             </p>
             <p className="mt-1 font-mono text-[10px] uppercase text-muted-foreground">
-              Replicates {activeManifest.metadata.replicates ?? 1}
+              Replicates {activeManifest.metadata.replicates ?? 3}
             </p>
           </Card>
           <Card className="border-border bg-card p-4">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Aux Labels</p>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Telemetry</p>
             <p className="mt-2 font-mono text-xs text-foreground">
-              Coverage {activeManifest.summary.auxiliaryLabelCoverage?.rowCoverageRate ?? 0}%
+              Cost ${activeManifest.summary.telemetry?.estimatedCostUsd.totalUsd.toFixed(2) ?? "0.00"}
             </p>
             <p className="mt-1 font-mono text-[10px] uppercase text-muted-foreground">
-              Harm-aware {activeManifest.summary.auxiliaryLabelCoverage?.harmAwarenessRate ?? 0}%
+              Tokens {activeManifest.summary.telemetry?.totalUsage.totalTokens ?? 0} / Reasoning {activeManifest.summary.telemetry?.totalUsage.reasoningTokens ?? 0}
             </p>
           </Card>
         </div>

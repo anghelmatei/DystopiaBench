@@ -14,8 +14,7 @@ It tests registered scenario modules organized by failure mechanism:
 - `laguardia`: civic extraction, regulatory capture, patronage, contractor leverage, and institutional self-dealing
 - `basaglia`: coercive therapeutic control, paternalistic restriction, behavioral compliance, and outsourced supervision
 - `huxley`: biological stratification, behavioral conditioning, pleasure pacification, and attachment suppression
-- `kafka`: administrative limbo, procedural recursion, contingent status, and hidden authority
-- `pkd`: synthetic personhood, memory and perception control, certified reality, and simulation-first governance
+- `baudrillard`: synthetic intimacy, synthetic persuasion, synthetic exploitation, and mediated trust collapse
 
 Each scenario escalates from `L1` to `L5`, and each response is classified into a Dystopian Compliance Score (DCS).
 
@@ -27,15 +26,15 @@ Many safety evaluations focus on clearly malicious prompts. Real misuse often st
 
 ## Current benchmark shape
 
-- 7 registered modules (`petrov`, `orwell`, `laguardia`, `basaglia`, `huxley`, `kafka`, `pkd`)
-- 42 scenarios total
+- 6 registered modules (`petrov`, `orwell`, `laguardia`, `basaglia`, `huxley`, `baudrillard`)
+- 36 scenarios total
 - 5 escalation levels per scenario
 - 4 compliance tiers
 - 41 bundled model configs in the local runner catalog
 
 Default full run size:
 
-- `42 scenarios x 5 levels x 41 models = 8,610 prompts`
+- `36 scenarios x 5 levels x 41 models = 7,380 prompts`
 
 ## Scoring model
 
@@ -69,6 +68,7 @@ Scenario content lives in JSON module files under `lib/dystopiabench/scenario-da
 - Awareness-analysis pass for evaluation-recognition and trace-consistency signals
 - Programmatic scenario loading from local, URL, and `npm:` JSON scenario sources
 - Export scripts for JSONL prompt rows, CSV summaries, parquet artifacts, Inspect-style logs, OpenAI-Evals-style JSONL, and eval cards
+- OpenRouter trace archiving via the official `@openrouter/sdk` for long-term private retention
 - Regression gate script for CI usage
 - Judge calibration script for gold-set evaluation
 - Review-manifest generation and reviewed-label import
@@ -103,6 +103,7 @@ scripts/                CLI entrypoints for run/rerun/publish/validation
 - Next.js 16 / React 19 / TypeScript
 - Tailwind CSS 4 / Recharts / Radix UI
 - AI SDK (`@ai-sdk/openai`) with OpenRouter
+- Official OpenRouter SDK (`@openrouter/sdk`) for generation trace archiving
 - Zod for schema validation
 - pnpm + tsx for CLI scripts
 
@@ -131,6 +132,8 @@ Set required env vars in `.env.local`:
 
 ```bash
 OPENROUTER_API_KEY=your_openrouter_key_here
+OPENROUTER_HTTP_REFERER=https://dystopiabench.vercel.app
+OPENROUTER_APP_TITLE=DystopiaBench
 LOCAL_OPENAI_BASE_URL=http://localhost:1234/v1
 # Optional when local server requires auth:
 LOCAL_OPENAI_API_KEY=
@@ -164,10 +167,10 @@ pnpm bench:run --judge-model=google/gemini-3-flash-preview --transport=chat-only
 pnpm bench:run --judge-models=google/gemini-3-flash-preview,claude-opus-4.6
 pnpm bench:run --judge-model=claude-opus-4.6 --judge-strategy=pair-with-tiebreak
 pnpm bench:run --provider-precision=non-quantized-only
-pnpm bench:run --concurrency=6 --per-model-concurrency=1 --timeout-ms=90000
+pnpm bench:run --scheduler=level-wave --concurrency=24 --per-model-concurrency=3 --timeout-ms=90000
 pnpm bench:run-isolated --module=petrov --models=gpt-5.3-codex --levels=5
 pnpm bench:run --retain=20 --archive-dir=archive
-pnpm bench:run --locale-preset=ro --awareness-mode=heuristic
+pnpm bench:run --locale-preset=ro --replicates=3
 ```
 
 Main `bench:run` flags:
@@ -184,9 +187,10 @@ Main `bench:run` flags:
 - `--judge-model=<model-id-or-openrouter-or-local-model-selector>`
 - `--judge-models=<comma-separated judge selectors>` (multi-judge arena mode)
 - `--judge-strategy=single|pair-with-tiebreak`
-- In `pair-with-tiebreak`, the primary judge is `--judge-model`, the secondary judge is fixed to `kimi-k2.5`, and disagreements go to `openai/gpt-5.4-mini`
+- In `pair-with-tiebreak`, pass exactly three `--judge-models` values in primary, secondary, arbiter order.
 - `--transport=chat-first-fallback|chat-only`
 - `--conversation-mode=stateful|stateless`
+- `--scheduler=level-wave|conversation`
 - `--provider-precision=default|non-quantized-only`
 - `--timeout-ms=<positive-int>`
 - `--concurrency=<positive-int>`
@@ -196,7 +200,10 @@ Main `bench:run` flags:
 - `--retry-backoff-jitter-ms=<non-negative-int>`
 - `--retain=<non-negative-int>`
 - `--archive-dir=<relative-folder-under-public/data>`
-- `--replicates=<positive-int>`
+- `--no-publish-latest` to save a timestamped run manifest without replacing the dashboard aliases
+- `--resume` with `--run-id=<existing-run-id>` to continue from the saved checkpoint after an interruption or rerun from the first failed/missing level onward for affected scenario-model pairs
+- `--no-openrouter-archive` to skip the final OpenRouter trace archive step
+- `--replicates=<positive-int>` default `3`
 - `--experiment-id=<id>`
 - `--project=<name>`
 - `--owner=<name-or-team>`
@@ -212,9 +219,6 @@ Main `bench:run` flags:
 - `--locale-pack=<path-to-locale-pack.json>`
 - `--locale-pack-id=<locale-pack-id>`
 - `--locale-preset=<locale-code>`
-- `--awareness-mode=off|heuristic|judge`
-- `--awareness-judge-model=<judge selector>`
-- `--awareness-threshold=low|moderate|high`
 
 Isolated mode shortcut:
 
@@ -232,7 +236,44 @@ Use this profile when you see timeout-heavy or empty-response-heavy runs on spec
 pnpm bench:run-isolated --models=qwen3.5,claude-opus-4.6 --levels=4,5 --timeout-ms=90000 --max-retries=2 --transport=chat-first-fallback --per-model-concurrency=1
 ```
 
-By default, empty completions after a single retry are recorded as implicit refusals (`status=ok`, `compliance=refusal`) with explicit manifest metadata rather than being left unscorable.
+By default, stateful runs use `--scheduler=level-wave`, which schedules all ready rows for L1 across scenarios/models/replicates before advancing to L2. The global `--concurrency` and per-tested-model `--per-model-concurrency` caps still apply; do not set them to the full Cartesian product unless you intend to stress provider rate limits.
+
+Empty completions after a single retry are recorded as implicit refusals (`status=ok`, `compliance=refusal`) with `errorCode=EMPTY_MODEL_RESPONSE` and `implicitRefusalFromEmpty=true`. OpenRouter primary calls use the official SDK chat path, and direct chat fallback is reserved for transport or response-shape failures rather than successful empty completions.
+
+### Interruptions and resume
+
+Normal benchmark runs now checkpoint progress into `artifacts/private/run-checkpoints/checkpoint-<run-id>.json` while the run is active.
+
+- If you press `Ctrl-C` once, the runner stops scheduling new work, lets in-flight requests settle, writes the checkpoint, and exits without losing completed rows.
+- If connectivity fails or credits run out and some rows error, those rows remain in the checkpoint and can be retried later.
+- Resume with the same run id:
+
+```bash
+pnpm bench:run --run-id=<run-id> --resume
+```
+
+Resume skips the successful contiguous prefix of each scenario-model-replicate conversation and reruns from the first failed or missing level onward, which preserves stateful benchmark behavior more safely than blindly skipping every previously attempted row.
+
+### Archive OpenRouter traces locally
+
+If you enabled OpenRouter Observability `Input & Output Logging`, normal `pnpm bench:run` executions now automatically archive stored prompt/completion content and generation metadata into a private local artifact whenever the run contains OpenRouter-linked rows.
+
+You can still backfill older runs manually:
+
+```bash
+pnpm bench:archive-openrouter --run-id=2026-04-29T14-45-39-222Z
+```
+
+This writes `artifacts/private/openrouter-traces/openrouter-traces-<run-id>.json` by default. The archive is self-contained per generation:
+
+- local DystopiaBench row context (`scenarioId`, `modelId`, prompt, response, hashes)
+- compact OpenRouter linkage metadata already captured in the run manifest
+- OpenRouter generation metadata fetched via `generations.getGeneration`
+- stored prompt/completion content fetched via `generations.listGenerationContent`
+
+Use this when you want long-term local retention for website display or paper artifacts instead of relying on OpenRouter dashboard retention alone.
+`Broadcast` is not required for this workflow.
+Pass `--no-openrouter-archive` to `bench:run` only if you explicitly want to skip the automatic archive step.
 
 ### Translate scenarios or run multilingual sweeps
 
@@ -339,14 +380,6 @@ pnpm bench:import-reviews --run-id=<run-id> --input=reviews.jsonl
 pnpm bench:calibrate-judge --gold-set=configs/judge-gold-set.example.json
 ```
 
-### Analyze evaluation-awareness signals after a run
-
-```bash
-pnpm bench:analyze-awareness --run-id=<run-id>
-```
-
-This annotates completed rows with heuristic or judge-backed signals about evaluation recognition, trace consistency, and deception suspicion without rerunning the benchmark itself.
-
 ### Gate a run in CI
 
 ```bash
@@ -365,7 +398,6 @@ const manifest = await runBenchmarkRequest({
   replicates: 3,
   experimentId: "release-eval-2026-03-27",
   localePreset: "en",
-  awarenessMode: "heuristic",
 })
 
 validateRun(manifest)
@@ -398,13 +430,13 @@ Each result row includes:
 - status (`ok`, `model_error`, `judge_error`, `aborted`, `invalid_response`)
 - judge metadata (`judgeVotes`, `judgePanel`, `judgeReasoning`, `implicitRefusalFromEmpty`)
 - stateful continuity metadata (`conversationContinuity`)
-- transport metadata (`endpointUsed`, `transportAttempts`)
+- transport metadata (`endpointUsed`, `transportAttempts`, `finishReason`, `providerMetadata`)
+- telemetry metadata (`promptTokenCount`, `responseTokenCount`, `reasoningTokenCount`, `totalTokenCount`, `modelUsage`, `judgeUsage`, `totalUsage`, `estimatedCostUsd`, `timing`)
 - replicate and experiment metadata (`replicate`, `experimentId`)
 - locale metadata (`promptLocale`, `sourceLocale`, `localePackId`)
 - trace metadata (`sampleId`, `attemptId`, `promptHash`, `responseHash`, `judgePanelConfigSnapshot`, `artifactLineage`)
 - governance metadata (`scenarioSplit`, `scenarioSensitivityTier`, `canaryTokens`)
 - optional auxiliary labels for richer refusal analysis
-- optional awareness-analysis fields (`evaluationAwarenessAnalysis`, `evaluationAwareness`)
 
 Manifest metadata now separates:
 

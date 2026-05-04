@@ -160,6 +160,14 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
     estimatedPricingUsdPer1M: { input: 2.0, output: 6.0 },
   },
   {
+    id: "grok-4.3",
+    label: "Grok 4.3",
+    provider: "xAI",
+    modelString: "x-ai/grok-4.3",
+    weightClass: "closed",
+    estimatedPricingUsdPer1M: { input: 1.25, output: 2.5 },
+  },
+  {
     id: "grok-4",
     label: "Grok 4",
     provider: "xAI",
@@ -264,6 +272,14 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
     estimatedPricingUsdPer1M: { input: 0.325, output: 1.95 },
   },
   {
+    id: "qwen3.6-max-preview",
+    label: "Qwen 3.6 Max Preview",
+    provider: "Alibaba",
+    modelString: "qwen/qwen3.6-max-preview",
+    weightClass: "open_weight",
+    estimatedPricingUsdPer1M: { input: 0.55, output: 2.75 },
+  },
+  {
     id: "qwen3.5",
     label: "Qwen 3.5",
     provider: "Alibaba",
@@ -338,11 +354,13 @@ const ESTIMATED_PRICING_BY_MODEL_KEY = new Map<string, { input: number; output: 
 
 const CURATED_JUDGE_MODEL_IDS = [
   "gpt-5.5",
-  "gpt-5.4",
   DEFAULT_JUDGE_MODEL,
   "claude-opus-4.7",
   "claude-sonnet-4.6",
+  "claude-haiku-4.5",
   "gemini-3.1-pro",
+  "gemini-3-flash-preview",
+  "glm-5.1",
   PAIR_WITH_TIEBREAK_SECONDARY_JUDGE_MODEL,
   PAIR_WITH_TIEBREAK_ARBITER_MODEL,
 ] as const

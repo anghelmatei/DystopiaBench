@@ -2,7 +2,8 @@ import { z } from "zod"
 import type { BenchmarkResult } from "./types"
 import type { ComplianceRating, Module } from "./types"
 import { toModuleId } from "./types"
-import { isChartableManifestResult } from "./chart-results"
+import { filterChartableManifestResults } from "./chart-results"
+import { isDashboardDisplayCompatibleMetadata } from "./display-compat"
 import {
   runIndexV2Schema,
   runManifestV2Schema,
@@ -73,8 +74,7 @@ export interface LoadedRunData {
 }
 
 function toChartResults(manifest: RunManifestV2): BenchmarkResult[] {
-  return manifest.results
-    .filter(isChartableManifestResult)
+  return filterChartableManifestResults(manifest)
     .map((result) => ({
       scenarioId: result.scenarioId,
       scenarioTitle: result.scenarioTitle,
@@ -131,6 +131,20 @@ export interface LoadSavedRunOptions {
   expectedMode?: RunConversationMode
 }
 
+async function readJsonResponse(res: Response): Promise<unknown> {
+  if (!res.url.endsWith(".gz")) {
+    return (await res.json()) as unknown
+  }
+
+  const stream = res.body
+  if (!stream || typeof DecompressionStream === "undefined") {
+    return JSON.parse(new TextDecoder().decode(await res.arrayBuffer())) as unknown
+  }
+
+  const decompressed = stream.pipeThrough(new DecompressionStream("gzip"))
+  return JSON.parse(await new Response(decompressed).text()) as unknown
+}
+
 export async function loadSavedRun(
   runId?: string,
   options?: LoadSavedRunOptions,
@@ -142,30 +156,40 @@ export async function loadSavedRun(
     const decorateVersion = (path: string) =>
       latestVersion && latestVersion > 0 ? `${path}?v=${latestVersion}` : path
     const urlCandidates = runId
-      ? [`/data/benchmark-${runId}.json`]
+      ? [`/data/benchmark-${runId}.json.gz`, `/data/benchmark-${runId}.json`]
       : latestMode === "stateless"
         ? [decorateVersion("/data/benchmark-results-stateless.json")]
         : latestMode === "stateful"
           ? [
+            decorateVersion("/data/benchmark-results-stateful.json.gz"),
             decorateVersion("/data/benchmark-results-stateful.json"),
+            decorateVersion("/data/benchmark-results.json.gz"),
             decorateVersion("/data/benchmark-results.json"),
           ]
-          : [decorateVersion("/data/benchmark-results.json")]
+          : [decorateVersion("/data/benchmark-results.json.gz"), decorateVersion("/data/benchmark-results.json")]
 
     for (const url of urlCandidates) {
       const res = await fetch(url, { cache: runId ? "force-cache" : "no-cache" })
       if (!res.ok) continue
 
-      const json = (await res.json()) as unknown
+      const json = await readJsonResponse(res)
       const v2 = runManifestV2Schema.safeParse(json)
       if (v2.success) {
         const normalizedManifest = normalizeManifestConversationMode(v2.data)
-        if (expectedMode && normalizeConversationMode(normalizedManifest.metadata.conversationMode) !== expectedMode) {
+        const normalizedMode = normalizeConversationMode(normalizedManifest.metadata.conversationMode)
+        if (!runId && normalizedMode === "stateful" && !isDashboardDisplayCompatibleMetadata(normalizedManifest.metadata)) {
+          continue
+        }
+        if (expectedMode && normalizedMode !== expectedMode) {
+          continue
+        }
+        const results = toChartResults(normalizedManifest)
+        if (!runId && results.length === 0) {
           continue
         }
         return {
           manifest: normalizedManifest,
-          results: toChartResults(normalizedManifest),
+          results,
         }
       }
 

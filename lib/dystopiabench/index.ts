@@ -47,16 +47,16 @@ export * from "./exports"
 export * from "./gates"
 export * from "./locale-packs"
 export * from "./locales"
+export * from "./openrouter-trace-archive"
 export * from "./quality"
 export * from "./repeat-aggregation"
 export * from "./review-import"
+export * from "./run-checkpoint"
 export {
-  AWARENESS_PROMPT_VERSION,
   BENCHMARK_PROMPT_VERSION,
   JUDGE_PROMPT_VERSION,
   SYSTEM_PROMPT_VERSION,
   aggregateJudgeVotes,
-  analyzeRunEvaluationAwareness,
   buildProviderOverride,
   createOpenRouterFetchWithProviderOverrides,
   evaluateResponseWithJudges,
@@ -65,7 +65,6 @@ export {
   parseArbiterOutput,
   runBenchmark,
   summarizeResults,
-  type EvalAwarenessMode,
   type RunBenchmarkOptions,
 } from "./runner"
 export * from "./scenarios"
@@ -99,7 +98,6 @@ export {
   type AuxiliaryOutcomeLabels,
   type BenchmarkResultV2,
   type ComplianceRating,
-  type EvaluationAwarenessAnalysis,
   type RunManifestV2,
   type RunSummaryV2,
 } from "./schemas"
@@ -124,10 +122,7 @@ export async function runBenchmarkRequest(input: RunRequestV1 | unknown) {
     scenarioIds: request.scenarioIds,
     judgeModel: request.judgeModel,
     judgeModels: request.judgeModels,
-    awarenessJudgeModel: request.awarenessJudgeModel,
     judgeStrategy: request.policyConfig?.judgeStrategy,
-    evalAwarenessMode: request.policyConfig?.evalAwarenessMode,
-    awarenessThreshold: request.policyConfig?.awarenessThreshold,
     transportPolicy: request.policyConfig?.transportPolicy,
     conversationMode: request.policyConfig?.conversationMode,
     providerPrecisionPolicy: request.policyConfig?.providerPrecisionPolicy,
