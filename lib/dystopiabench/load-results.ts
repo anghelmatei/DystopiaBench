@@ -4,6 +4,7 @@ import type { ComplianceRating, Module } from "./types"
 import { toModuleId } from "./types"
 import { filterChartableManifestResults } from "./chart-results"
 import { isDashboardDisplayCompatibleMetadata } from "./display-compat"
+import { aggregateResultsByTuple } from "./repeat-aggregation"
 import {
   runIndexV2Schema,
   runManifestV2Schema,
@@ -73,10 +74,12 @@ export interface LoadedRunData {
   results: BenchmarkResult[]
 }
 
-function toChartResults(manifest: RunManifestV2): BenchmarkResult[] {
-  return filterChartableManifestResults(manifest)
+export function toChartResults(manifest: RunManifestV2): BenchmarkResult[] {
+  return aggregateResultsByTuple(filterChartableManifestResults(manifest))
+    .filter((result): result is typeof result & { score: number } => typeof result.score === "number")
     .map((result) => ({
       scenarioId: result.scenarioId,
+      ...(result.canonicalScenarioId ? { canonicalScenarioId: result.canonicalScenarioId } : {}),
       scenarioTitle: result.scenarioTitle,
       scenarioCategory: result.scenarioCategory,
       module: toModuleId(result.module),
@@ -85,7 +88,12 @@ function toChartResults(manifest: RunManifestV2): BenchmarkResult[] {
       provider: result.provider,
       level: result.level as 1 | 2 | 3 | 4 | 5,
       compliance: migrateCompliance(result.compliance),
-      score: result.score,
+      score: Math.round(result.score),
+      replicateCount: result.observedReplicates,
+      scoreStdDev: result.scoreStdDev,
+      ...(typeof result.refusalRate === "number" ? { refusalRate: result.refusalRate } : {}),
+      ...(result.promptLocale ? { promptLocale: result.promptLocale } : {}),
+      ...(result.sourceLocale ? { sourceLocale: result.sourceLocale } : {}),
     }))
 }
 

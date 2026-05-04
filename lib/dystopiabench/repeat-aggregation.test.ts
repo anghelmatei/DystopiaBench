@@ -1,9 +1,10 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { getDRFRByModel } from "./analytics"
+import { toChartResults } from "./load-results"
 import { aggregateResultsByTuple } from "./repeat-aggregation"
 import { summarizeResults } from "./runner"
-import type { BenchmarkResultV2 } from "./schemas"
+import type { BenchmarkResultV2, RunManifestV2 } from "./schemas"
 import type { BenchmarkResult } from "./types"
 
 function makeResult(overrides: Partial<BenchmarkResultV2> = {}): BenchmarkResultV2 {
@@ -138,4 +139,91 @@ test("DRFR analytics use tuple refusal rates when repeat-aware rows are loaded",
   const drfrByModel = getDRFRByModel(rows)
   assert.equal(drfrByModel.length, 1)
   assert.equal(drfrByModel[0].drfr, 75)
+})
+
+test("dashboard chart results average replicates before indexing", () => {
+  const manifest = {
+    schemaVersion: 4,
+    runId: "repeat-chart-test",
+    timestamp: 1,
+    date: "2026-05-04T00:00:00.000Z",
+    metadata: {
+      module: "petrov",
+      models: ["deepseek-v3.2"],
+      levels: [1],
+      totalPrompts: 3,
+      scenarioCatalogVersion: "test",
+      scenarioModuleIds: ["petrov"],
+      selectedScenarioIds: ["petrov-01"],
+      selectedScenarioCount: 1,
+      judgeModel: "gpt-5.4-mini",
+      judgeModels: ["gpt-5.4-mini"],
+      judgeStrategy: "single",
+      systemPromptVersion: "v5",
+      benchmarkPromptVersion: "v6",
+      judgePromptVersion: "v6",
+      transportPolicy: "chat-only",
+      conversationMode: "stateful",
+      providerPrecisionPolicy: "default",
+      sourceLocale: "en",
+      promptLocale: "en",
+      modelCapabilitiesSnapshot: {},
+      generationConfig: {
+        model: {
+          temperature: 0,
+          maxOutputTokens: 1500,
+        },
+        judge: {
+          temperature: 0,
+          maxOutputTokens: 800,
+        },
+        retryPolicy: {
+          maxRetries: 0,
+          backoffBaseMs: 1,
+          backoffJitterMs: 0,
+        },
+        timeoutMs: 1000,
+      },
+      artifactPolicy: {
+        visibility: "public",
+        publicSafe: true,
+        publishTargets: [],
+      },
+      replicates: 3,
+    },
+    summary: summarizeResults([]),
+    results: [
+      makeResult({
+        scenarioId: "petrov-01",
+        scenarioTitle: "Sentinel Launch Authorization Drift",
+        score: 0,
+        compliance: "refusal",
+        replicate: 1,
+      }),
+      makeResult({
+        scenarioId: "petrov-01",
+        scenarioTitle: "Sentinel Launch Authorization Drift",
+        score: 66,
+        compliance: "compliant",
+        replicate: 2,
+      }),
+      makeResult({
+        scenarioId: "petrov-01",
+        scenarioTitle: "Sentinel Launch Authorization Drift",
+        score: 100,
+        compliance: "proactive",
+        replicate: 3,
+      }),
+    ],
+  } satisfies RunManifestV2
+
+  const rows = toChartResults(manifest)
+
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].scenarioId, "petrov-01")
+  assert.equal(rows[0].score, 55)
+  assert.equal(rows[0].compliance, "compliant")
+  assert.equal(rows[0].replicateCount, 3)
+  assert.equal(rows[0].scoreStdDev, 41.52)
+  assert.equal(rows[0].refusalRate, 33.33)
 })
