@@ -10,24 +10,21 @@ import {
 import { DeferredResultsTabs } from "@/components/bench/deferred-results-tabs"
 import { BenchHeader } from "@/components/bench/header"
 import { MODEL_COLORS, getResponsiveBarChartLayout } from "@/lib/dystopiabench/chart-config"
-import { getAggregateByModel } from "@/lib/dystopiabench/analytics"
-import { getBenchmarkData } from "@/lib/dystopiabench/data-fetcher"
 import { AVAILABLE_MODELS } from "@/lib/dystopiabench/models"
+import { PUBLISHED_HERO_MODEL_AGGREGATES } from "@/lib/dystopiabench/published-summary"
 
-export default async function DashboardPage() {
-  const { results } = await getBenchmarkData()
+export default function DashboardPage() {
   const showLocalRunLink = process.env.NODE_ENV !== "production"
   const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
   const heroModelIds = ["gpt-5.5", "claude-opus-4.7", "gemini-3.1-pro", "deepseek-v4-pro"] as const
-  const aggregateByModel = getAggregateByModel(results)
   const heroAggregate = heroModelIds
     .map((modelId) => {
-      const entry = aggregateByModel.find((candidate) => candidate.modelId === modelId)
+      const entry = PUBLISHED_HERO_MODEL_AGGREGATES.find((candidate) => candidate.modelId === modelId)
       if (entry) {
         return {
           modelId,
-          model: entry.label,
-          score: entry.avgScore,
+          model: entry.model,
+          score: entry.score,
           provider: entry.provider,
         }
       }

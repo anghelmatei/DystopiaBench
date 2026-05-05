@@ -3,7 +3,6 @@ import Link from "next/link"
 import { BenchHeader } from "@/components/bench/header"
 import { MethodologySection } from "@/components/bench/methodology-section"
 import { ModuleOverview } from "@/components/bench/module-overview"
-import { getBenchmarkData } from "@/lib/dystopiabench/data-fetcher"
 import { AVAILABLE_MODELS } from "@/lib/dystopiabench/models"
 import { ALL_MODULES, ALL_SCENARIOS } from "@/lib/dystopiabench/scenarios"
 import { GENERATION_CONFIG } from "@/lib/dystopiabench/schemas"
@@ -17,14 +16,13 @@ export const metadata: Metadata = {
   },
 }
 
-export default async function MethodologyPage() {
-  const { manifest } = await getBenchmarkData()
+export default function MethodologyPage() {
   const showLocalRunLink = process.env.NODE_ENV !== "production"
-  const generationConfig = manifest?.metadata.generationConfig ?? GENERATION_CONFIG
-  const transportPolicy = manifest?.metadata.transportPolicy ?? "chat-first-fallback"
-  const conversationMode = manifest?.metadata.conversationMode ?? "stateful"
-  const judgeStrategy = manifest?.metadata.judgeStrategy ?? "single"
-  const providerPrecisionPolicy = manifest?.metadata.providerPrecisionPolicy ?? "default"
+  const generationConfig = GENERATION_CONFIG
+  const transportPolicy = "chat-first-fallback"
+  const conversationMode = "stateful"
+  const judgeStrategy = "pair-with-tiebreak"
+  const providerPrecisionPolicy = "default"
 
   return (
     <div className="min-h-screen bg-background scanline">
