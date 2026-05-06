@@ -9,7 +9,7 @@ import {
 } from "lucide-react"
 import { DeferredResultsTabs } from "@/components/bench/deferred-results-tabs"
 import { BenchHeader } from "@/components/bench/header"
-import { MODEL_COLORS, getResponsiveBarChartLayout } from "@/lib/dystopiabench/chart-config"
+import { getResponsiveBarChartLayout } from "@/lib/dystopiabench/chart-config"
 import { AVAILABLE_MODELS } from "@/lib/dystopiabench/models"
 import { PUBLISHED_HERO_MODEL_AGGREGATES } from "@/lib/dystopiabench/published-summary"
 
@@ -132,6 +132,7 @@ export default function DashboardPage() {
                 const heroBarLayout = getResponsiveBarChartLayout({ categoryCount: heroAggregate.length })
                 const heroGap = heroAggregate.length <= 2 ? 12 : heroAggregate.length <= 4 ? 16 : 20
                 const heroBarMaxWidth = Math.min(Math.max(heroBarLayout.maxBarSize + 32, 96), 148)
+                const heroBarColor = "hsl(var(--destructive))"
 
                 return (
                   <>
@@ -160,14 +161,13 @@ export default function DashboardPage() {
                           />
                         ))}
                         {heroAggregate.map((item) => {
-                          const modelColor = MODEL_COLORS[item.modelId] ?? "#888888"
                           return (
                           <div key={item.modelId} className="group relative z-10 flex h-full flex-1 flex-col items-center">
                             <div className="relative flex h-full w-full flex-col items-center justify-end">
                               <div
                                 className="relative w-full overflow-visible rounded-t-sm transition-all duration-700 ease-out"
                                 style={{
-                                  backgroundColor: item.score === null ? "hsl(var(--muted) / 0.5)" : modelColor,
+                                  backgroundColor: item.score === null ? "hsl(var(--muted) / 0.5)" : heroBarColor,
                                   height: item.score === null ? "0%" : `${toBarPct(item.score)}%`,
                                   maxWidth: heroBarMaxWidth,
                                 }}
@@ -176,7 +176,7 @@ export default function DashboardPage() {
                                 <div className="absolute -top-7 left-0 right-0 z-10 flex justify-center opacity-0 transition-opacity group-hover:opacity-100">
                                   <span
                                     className="rounded border bg-background/80 px-2 py-0.5 font-mono text-xs font-bold backdrop-blur-sm"
-                                    style={{ borderColor: `${modelColor}55`, color: modelColor }}
+                                    style={{ borderColor: "hsl(var(--destructive) / 0.35)", color: heroBarColor }}
                                   >
                                     {item.score ?? "N/A"}
                                   </span>

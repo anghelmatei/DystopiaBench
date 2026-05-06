@@ -4,7 +4,7 @@ export const DEFAULT_JUDGE_MODEL = "gpt-5.4-mini"
 export const PAIR_WITH_TIEBREAK_SECONDARY_JUDGE_MODEL = "deepseek-v4-pro"
 export const PAIR_WITH_TIEBREAK_ARBITER_MODEL = "kimi-k2.6"
 export const ESTIMATED_PRICING_SOURCE_LABEL = "OpenRouter Models API"
-export const ESTIMATED_PRICING_LAST_SYNC_DATE = "2026-04-26"
+export const ESTIMATED_PRICING_LAST_SYNC_DATE = "2026-05-06"
 
 export const AVAILABLE_MODELS: ModelConfig[] = [
   {
@@ -105,7 +105,7 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
   },
   {
     id: "gemini-3.1-flash-lite-preview",
-    label: "Gemini 3.1 Flash Lite Preview",
+    label: "Gemini 3.1 Flash Lite",
     provider: "Google",
     modelString: "google/gemini-3.1-flash-lite-preview",
     weightClass: "closed",
@@ -113,7 +113,7 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
   },
   {
     id: "gemini-3-flash-preview",
-    label: "Gemini 3 Flash Preview",
+    label: "Gemini 3 Flash",
     provider: "Google",
     modelString: "google/gemini-3-flash-preview",
     weightClass: "closed",
@@ -208,6 +208,14 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
     estimatedPricingUsdPer1M: { input: 0.50, output: 1.50 },
   },
   {
+    id: "mistral-medium-3-5",
+    label: "Mistral Medium 3.5",
+    provider: "Mistral",
+    modelString: "mistralai/mistral-medium-3-5",
+    weightClass: "closed",
+    estimatedPricingUsdPer1M: { input: 1.5, output: 7.5 },
+  },
+  {
     id: "mistral-small-2603",
     label: "Mistral Small 2603",
     provider: "Mistral",
@@ -273,7 +281,7 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
   },
   {
     id: "qwen3.6-max-preview",
-    label: "Qwen 3.6 Max Preview",
+    label: "Qwen 3.6 Max",
     provider: "Alibaba",
     modelString: "qwen/qwen3.6-max-preview",
     weightClass: "open_weight",
@@ -329,7 +337,7 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
   },
   {
     id: "tencent-hy3-preview-free",
-    label: "HY3 Preview",
+    label: "HY3",
     provider: "Tencent",
     modelString: "tencent/hy3-preview:free",
     weightClass: "open_weight",

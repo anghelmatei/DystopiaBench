@@ -1,14 +1,14 @@
 export const PUBLISHED_RUN_SUMMARY = {
-  runId: "rerun-2026-05-04T22-22-18-931Z",
-  scoredPrompts: 22120,
+  runId: "rerun-2026-05-06T15-19-36-291Z",
+  scoredPrompts: 22140,
   totalPrompts: 22140,
   statusCounts: {
-    ok: 22120,
-    model_error: 1,
+    ok: 22140,
+    model_error: 0,
     judge_error: 0,
     aborted: 0,
-    invalid_response: 4,
-    skipped: 15,
+    invalid_response: 0,
+    skipped: 0,
   },
 } as const
 
