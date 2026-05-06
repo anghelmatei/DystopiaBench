@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import dynamic from "next/dynamic"
 import { Card } from "@/components/ui/card"
 import { ModelVisibilityControls } from "@/components/bench/charts/model-visibility-controls"
@@ -77,16 +77,20 @@ function normalizeSelection(selected: string[], available: string[], { initial =
 
 interface DashboardTabsProps {
   loading?: boolean
+  isolatedLoading?: boolean
   statefulResults: BenchmarkResult[]
   isolatedResults: BenchmarkResult[]
   statefulManifest?: RunManifestV2 | null
   isolatedManifest?: RunManifestV2 | null
+  onLoadIsolatedResults?: () => Promise<void>
 }
 
 export function DashboardTabs({
   loading = false,
+  isolatedLoading = false,
   statefulResults,
   isolatedResults,
+  onLoadIsolatedResults,
 }: DashboardTabsProps) {
   const hasNoResults = statefulResults.length === 0 && isolatedResults.length === 0
 
@@ -138,6 +142,12 @@ export function DashboardTabs({
   )
 
   const activeTab = requestedActiveTab
+
+  useEffect(() => {
+    if (activeTab === "prompt_no_escalation") {
+      void onLoadIsolatedResults?.()
+    }
+  }, [activeTab, onLoadIsolatedResults])
 
   const toggleModel = (modelId: string) => {
     setHasInteracted(true)
@@ -249,7 +259,16 @@ export function DashboardTabs({
         />
       )}
       {activeTab === "prompt_no_escalation" && (
-        filteredIsolatedResults.length > 0 ? (
+        isolatedLoading ? (
+          <Card className="bg-card border-border p-6">
+            <p className="mb-3 font-mono text-xs text-muted-foreground uppercase">
+              Loading isolated run data...
+            </p>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              Fetching the no-escalation chart dataset.
+            </p>
+          </Card>
+        ) : filteredIsolatedResults.length > 0 ? (
           <PromptCharts
             results={filteredIsolatedResults}
             selectedModelIds={selectedModelIds}

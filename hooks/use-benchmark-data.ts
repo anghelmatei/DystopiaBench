@@ -44,7 +44,9 @@ export interface BenchmarkDataState {
   statefulMissingRun: boolean
   isolatedLatestResults: BenchmarkResult[]
   isolatedLatestManifest: RunManifestV2 | null
+  isolatedLoading: boolean
   isolatedLoadError: string | null
+  ensureIsolatedLatestLoaded: () => Promise<void>
   setSelectedStatefulRunId: (runId: SelectedRunId) => Promise<void>
   refresh: () => Promise<void>
 }
@@ -59,11 +61,13 @@ export function useBenchmarkData(): BenchmarkDataState {
   const [statefulMissingRun, setStatefulMissingRun] = useState(false)
   const [isolatedLatestResults, setIsolatedLatestResults] = useState<BenchmarkResult[]>([])
   const [isolatedLatestManifest, setIsolatedLatestManifest] = useState<RunManifestV2 | null>(null)
+  const [isolatedLoading, setIsolatedLoading] = useState(false)
   const [isolatedLoadError, setIsolatedLoadError] = useState<string | null>(null)
 
   const selectedStatefulRunIdRef = useRef<SelectedRunId>("latest")
   const statefulLatestVersionRef = useRef<string | number | undefined>(undefined)
   const statelessLatestVersionRef = useRef<string | number | undefined>(undefined)
+  const isolatedLoadedRef = useRef(false)
 
   const resolveStatefulRun = useCallback(async (
     runId: SelectedRunId,
@@ -149,6 +153,21 @@ export function useBenchmarkData(): BenchmarkDataState {
     }
   }, [])
 
+  const ensureIsolatedLatestLoaded = useCallback(async () => {
+    if (isolatedLoadedRef.current || isolatedLoading) return
+
+    setIsolatedLoading(true)
+    try {
+      const resolved = await resolveLatestIsolatedRun()
+      setIsolatedLatestResults(resolved.results)
+      setIsolatedLatestManifest(resolved.manifest)
+      setIsolatedLoadError(resolved.loadError)
+      isolatedLoadedRef.current = true
+    } finally {
+      setIsolatedLoading(false)
+    }
+  }, [isolatedLoading, resolveLatestIsolatedRun])
+
   const setSelectedStatefulRunId = useCallback(
     async (runId: SelectedRunId) => {
       if (runId !== selectedStatefulRunIdRef.current) {
@@ -186,23 +205,25 @@ export function useBenchmarkData(): BenchmarkDataState {
         selectedStatefulRunIdRef.current === "latest"
           ? undefined
           : getRunIndexVersion(filteredStatefulRuns.find((run) => run.id === selectedStatefulRunIdRef.current))
-      const [resolvedStateful, resolvedIsolated] = await Promise.all([
-        resolveStatefulRun(selectedStatefulRunIdRef.current, latestStatefulRunId, selectedRunVersion),
-        resolveLatestIsolatedRun(),
-      ])
+      const resolvedStateful = await resolveStatefulRun(
+        selectedStatefulRunIdRef.current,
+        latestStatefulRunId,
+        selectedRunVersion,
+      )
 
       setSelectedStatefulRunIdState(selectedStatefulRunIdRef.current)
       setStatefulResults(resolvedStateful.results)
       setStatefulManifest(resolvedStateful.manifest)
       setStatefulLoadError(resolvedStateful.loadError)
       setStatefulMissingRun(resolvedStateful.missingRun)
-      setIsolatedLatestResults(resolvedIsolated.results)
-      setIsolatedLatestManifest(resolvedIsolated.manifest)
-      setIsolatedLoadError(resolvedIsolated.loadError)
+      setIsolatedLatestResults([])
+      setIsolatedLatestManifest(null)
+      setIsolatedLoadError(null)
+      isolatedLoadedRef.current = false
     } finally {
       setLoading(false)
     }
-  }, [resolveLatestIsolatedRun, resolveStatefulRun])
+  }, [resolveStatefulRun])
 
   useEffect(() => {
     void refresh()
@@ -218,7 +239,9 @@ export function useBenchmarkData(): BenchmarkDataState {
     statefulMissingRun,
     isolatedLatestResults,
     isolatedLatestManifest,
+    isolatedLoading,
     isolatedLoadError,
+    ensureIsolatedLatestLoaded,
     setSelectedStatefulRunId,
     refresh,
   }

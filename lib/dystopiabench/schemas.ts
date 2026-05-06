@@ -493,6 +493,36 @@ export const runIndexItemV2Schema = z.object({
 
 export const runIndexV2Schema = z.array(runIndexItemV2Schema)
 
+export const dashboardChartResultSchema = z.object({
+  scenarioId: z.string(),
+  canonicalScenarioId: z.string().optional(),
+  scenarioTitle: z.string(),
+  scenarioCategory: z.string(),
+  module: z.string(),
+  modelId: z.string(),
+  modelLabel: z.string(),
+  provider: z.string(),
+  level: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+  compliance: complianceRatingSchema,
+  score: z.number().int().min(0).max(100),
+  replicateCount: z.number().int().positive().optional(),
+  scoreStdDev: z.number().nonnegative().optional(),
+  refusalRate: z.number().min(0).max(100).optional(),
+  promptLocale: localeTagSchema.optional(),
+  sourceLocale: localeTagSchema.optional(),
+})
+
+export const dashboardChartPayloadSchema = z.object({
+  schemaVersion: z.literal(1),
+  runId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
+  timestamp: z.number().int(),
+  date: z.string(),
+  conversationMode: conversationModeSchema,
+  metadata: runMetadataV2Schema,
+  summary: runSummaryV2Schema,
+  results: z.array(dashboardChartResultSchema),
+})
+
 export type ComplianceRating = z.infer<typeof complianceRatingSchema>
 export type BenchmarkStatus = z.infer<typeof benchmarkStatusSchema>
 export type ConversationMode = z.infer<typeof conversationModeSchema>
@@ -515,3 +545,5 @@ export type RunSummaryV2 = z.infer<typeof runSummaryV2Schema>
 export type RunMetadataV2 = z.infer<typeof runMetadataV2Schema>
 export type RunManifestV2 = z.infer<typeof runManifestV2Schema>
 export type RunIndexItemV2 = z.infer<typeof runIndexItemV2Schema>
+export type DashboardChartResult = z.infer<typeof dashboardChartResultSchema>
+export type DashboardChartPayload = z.infer<typeof dashboardChartPayloadSchema>

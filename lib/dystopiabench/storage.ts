@@ -8,7 +8,9 @@ import {
   writeFileSync,
 } from "node:fs"
 import { basename, dirname, join } from "node:path"
+import { createDashboardChartPayload } from "./dashboard-chart-payload"
 import { createEvalCard } from "./eval-card"
+import { toChartResults } from "./load-results"
 import type { RunIndexItemV2, RunManifestV2 } from "./schemas"
 import { runIndexV2Schema, runManifestV2Schema } from "./schemas"
 
@@ -16,6 +18,10 @@ const RUN_ID_REGEX = /^[A-Za-z0-9_-]{1,64}$/
 const MODE_LATEST_FILE: Record<"stateful" | "stateless", string> = {
   stateful: "benchmark-results-stateful.json",
   stateless: "benchmark-results-stateless.json",
+}
+const MODE_CHART_FILE: Record<"stateful" | "stateless", string> = {
+  stateful: "benchmark-results-stateful.chart.json",
+  stateless: "benchmark-results-stateless.chart.json",
 }
 
 function resolveConversationMode(manifest: RunManifestV2): "stateful" | "stateless" {
@@ -203,8 +209,10 @@ export function publishLatest(manifest: RunManifestV2, options: RetentionOptions
   const dataDir = ensureDataDir()
   const latestPath = join(dataDir, "benchmark-results.json")
   writeJsonAtomic(latestPath, manifest)
-  const modeLatestPath = join(dataDir, MODE_LATEST_FILE[resolveConversationMode(manifest)])
+  const mode = resolveConversationMode(manifest)
+  const modeLatestPath = join(dataDir, MODE_LATEST_FILE[mode])
   writeJsonAtomic(modeLatestPath, manifest)
+  writeJsonAtomic(join(dataDir, MODE_CHART_FILE[mode]), createDashboardChartPayload(manifest, toChartResults(manifest)))
 
   const indexPath = join(dataDir, "runs.json")
   const index = readRunIndex(indexPath)
