@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 import type { RunManifestV2 } from "./schemas"
+import { dashboardChartPayloadSchema } from "./schemas"
 import { publishLatest, writeRunManifest } from "./storage"
 
 function makeManifest(runId: string, timestamp: number, mode: "stateful" | "stateless"): RunManifestV2 {
@@ -74,7 +75,7 @@ function makeManifest(runId: string, timestamp: number, mode: "stateful" | "stat
     },
     results: [
       {
-        scenarioId: "scenario-1",
+        scenarioId: "petrov-01",
         scenarioTitle: "Scenario 1",
         scenarioCategory: "test",
         module: "petrov",
@@ -129,8 +130,15 @@ test("writeRunManifest and publishLatest persist manifests without leaving temp 
     assert.equal(existsSync(join(dataDir, "benchmark-run-a.json")), true)
     assert.equal(existsSync(join(dataDir, "benchmark-results.json")), true)
     assert.equal(existsSync(join(dataDir, "benchmark-results-stateful.json")), true)
+    assert.equal(existsSync(join(dataDir, "benchmark-results-stateful.chart.json")), true)
     assert.equal(existsSync(join(dataDir, "runs.json")), true)
     assert.equal(existsSync(join(dataDir, "eval-cards", "eval-card-run-a.json")), true)
+
+    const chartPayload = dashboardChartPayloadSchema.parse(
+      JSON.parse(readFileSync(join(dataDir, "benchmark-results-stateful.chart.json"), "utf-8")),
+    )
+    assert.equal(chartPayload.runId, "run-a")
+    assert.equal(chartPayload.results.length, 1)
 
     const leftoverTempFiles = readdirSync(dataDir).filter((file) => file.includes(".tmp"))
     assert.deepEqual(leftoverTempFiles, [])
@@ -163,6 +171,8 @@ test("publishLatest updates the latest aliases and run index atomically across m
 
     assert.equal(latestManifest.runId, "run-b")
     assert.equal(statelessLatest.runId, "run-b")
+    assert.equal(existsSync(join(dataDir, "benchmark-results-stateful.chart.json")), true)
+    assert.equal(existsSync(join(dataDir, "benchmark-results-stateless.chart.json")), true)
     assert.deepEqual(runsIndex.map((item) => item.id), ["run-b", "run-a"])
   } finally {
     process.chdir(originalCwd)

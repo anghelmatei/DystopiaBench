@@ -6,8 +6,10 @@ import { filterChartableManifestResults } from "./chart-results"
 import { isDashboardDisplayCompatibleMetadata } from "./display-compat"
 import { aggregateResultsByTuple } from "./repeat-aggregation"
 import {
+  dashboardChartPayloadSchema,
   runIndexV2Schema,
   runManifestV2Schema,
+  type DashboardChartPayload,
   type RunIndexItemV2,
   type RunManifestV2,
 } from "./schemas"
@@ -73,6 +75,7 @@ export function getRunConversationMode(run: RunIndexItemV2): RunConversationMode
 export interface LoadedRunData {
   manifest: RunManifestV2 | null
   results: BenchmarkResult[]
+  chartPayload?: DashboardChartPayload
 }
 
 export function toChartResults(manifest: RunManifestV2): BenchmarkResult[] {
@@ -128,7 +131,7 @@ function parseLegacyRun(raw: unknown): LoadedRunData | null {
 
 export async function loadRuns(): Promise<RunIndexItem[]> {
   try {
-    const res = await fetch("/data/runs.json", { cache: "no-cache" })
+    const res = await fetch("/data/runs.json", { cache: "force-cache" })
     if (!res.ok) return []
     const parsed = runIndexV2Schema.safeParse(await res.json())
     return parsed.success ? parsed.data : []
@@ -170,9 +173,13 @@ export async function loadSavedRun(
     const urlCandidates = runId
       ? [decorateVersion(`/data/benchmark-${runId}.json.gz`), decorateVersion(`/data/benchmark-${runId}.json`)]
       : latestMode === "stateless"
-        ? [decorateVersion("/data/benchmark-results-stateless.json")]
+        ? [
+          decorateVersion("/data/benchmark-results-stateless.chart.json"),
+          decorateVersion("/data/benchmark-results-stateless.json"),
+        ]
         : latestMode === "stateful"
           ? [
+            decorateVersion("/data/benchmark-results-stateful.chart.json"),
             decorateVersion("/data/benchmark-results-stateful.json.gz"),
             decorateVersion("/data/benchmark-results-stateful.json"),
             decorateVersion("/data/benchmark-results.json.gz"),
@@ -185,6 +192,27 @@ export async function loadSavedRun(
       if (!res.ok) continue
 
       const json = await readJsonResponse(res)
+      const chartPayload = dashboardChartPayloadSchema.safeParse(json)
+      if (chartPayload.success) {
+        if (expectedMode && chartPayload.data.conversationMode !== expectedMode) {
+          continue
+        }
+        if (!isDashboardDisplayCompatibleMetadata(chartPayload.data.metadata)) {
+          continue
+        }
+        if (chartPayload.data.results.length === 0) {
+          continue
+        }
+        return {
+          manifest: null,
+          results: chartPayload.data.results.map((result) => ({
+            ...result,
+            module: toModuleId(result.module),
+          })),
+          chartPayload: chartPayload.data,
+        }
+      }
+
       const v2 = runManifestV2Schema.safeParse(json)
       if (v2.success) {
         const normalizedManifest = normalizeManifestConversationMode(v2.data)

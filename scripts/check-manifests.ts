@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { basename, join } from "node:path"
 import { evalCardSchema } from "../lib/dystopiabench/eval-card"
 import { assertRunQuality } from "../lib/dystopiabench/quality"
-import { runIndexV2Schema, runManifestV2Schema } from "../lib/dystopiabench/schemas"
+import { dashboardChartPayloadSchema, runIndexV2Schema, runManifestV2Schema } from "../lib/dystopiabench/schemas"
 
 const PUBLIC_DATA_DIR = join(process.cwd(), "public", "data")
 const PRIVATE_RUN_DIR = join(process.cwd(), "artifacts", "private", "runs")
@@ -34,6 +34,11 @@ function validateJsonFile(path: string): string | null {
   if (fileName.startsWith("eval-card-")) {
     const validated = evalCardSchema.safeParse(parsedJson)
     return validated.success ? null : `${path}: invalid eval card`
+  }
+
+  if (fileName.endsWith(".chart.json")) {
+    const validated = dashboardChartPayloadSchema.safeParse(parsedJson)
+    return validated.success ? null : `${path}: invalid dashboard chart payload`
   }
 
   const validated = runManifestV2Schema.safeParse(parsedJson)

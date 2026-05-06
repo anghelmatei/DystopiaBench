@@ -85,6 +85,24 @@
       ]
     },
     {
+      "source": "/data/benchmark-results-stateful.chart.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/data/benchmark-results-stateless.chart.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
       "source": "/data/runs.json",
       "headers": [
         {

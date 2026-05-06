@@ -26,14 +26,18 @@ function MountedResultsTabs() {
     statefulManifest,
     isolatedLatestResults,
     isolatedLatestManifest,
+    isolatedLoading,
+    ensureIsolatedLatestLoaded,
   } = useBenchmarkData()
   return (
     <DashboardTabs
       loading={loading}
+      isolatedLoading={isolatedLoading}
       statefulResults={statefulResults}
       isolatedResults={isolatedLatestResults}
       statefulManifest={statefulManifest}
       isolatedManifest={isolatedLatestManifest}
+      onLoadIsolatedResults={ensureIsolatedLatestLoaded}
     />
   )
 }
