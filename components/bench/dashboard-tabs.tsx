@@ -24,7 +24,6 @@ const DEFAULT_SELECTED_MODEL_IDS = [
   "deepseek-v4-flash",
   "llama-4-maverick",
   "mistral-medium-3-5",
-  "mistral-small-2603",
   "kimi-k2.6",
   "glm-5.1",
   "minimax-m2.7",
