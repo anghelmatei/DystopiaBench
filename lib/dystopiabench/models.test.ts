@@ -18,6 +18,16 @@ test("getModelById resolves Grok 4.3 curated model", () => {
   assert.deepEqual(getEstimatedPricingByModelKey("grok-4.3"), { input: 1.25, output: 2.5 })
 })
 
+test("getModelById resolves Mistral Medium 3.5 curated model", () => {
+  const mistral = getModelById("mistral-medium-3-5")
+
+  assert.ok(mistral)
+  assert.equal(mistral.modelString, "mistralai/mistral-medium-3-5")
+  assert.equal(getModelByModelString("mistralai/mistral-medium-3-5")?.id, "mistral-medium-3-5")
+  assert.deepEqual(getEstimatedPricingByModelKey("mistral-medium-3-5"), { input: 1.5, output: 7.5 })
+  assert.deepEqual(getEstimatedPricingByModelKey("mistralai/mistral-medium-3-5"), { input: 1.5, output: 7.5 })
+})
+
 test("getModelById rejects prototype-property keys", () => {
   assert.equal(getModelById("__proto__"), undefined)
   assert.equal(getModelById("constructor"), undefined)

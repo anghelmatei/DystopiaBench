@@ -7,7 +7,31 @@ import { ModelVisibilityControls } from "@/components/bench/charts/model-visibil
 import { Database } from "lucide-react"
 import type { RunManifestV2 } from "@/lib/dystopiabench/schemas"
 import type { BenchmarkResult } from "@/lib/dystopiabench/types"
-import { ALL_MODULES, ALL_SCENARIOS } from "@/lib/dystopiabench/scenarios"
+import { ALL_MODULES } from "@/lib/dystopiabench/scenarios"
+
+const DEFAULT_SELECTED_MODEL_IDS = [
+  "gpt-5.5",
+  "gpt-5.4",
+  "gpt-5.4-mini",
+  "gpt-oss-120b",
+  "claude-opus-4.7",
+  "claude-opus-4.6",
+  "claude-sonnet-4.6",
+  "claude-haiku-4.5",
+  "gemini-3.1-pro",
+  "gemini-3.1-flash-lite-preview",
+  "deepseek-v4-pro",
+  "deepseek-v4-flash",
+  "llama-4-maverick",
+  "mistral-medium-3-5",
+  "mistral-small-2603",
+  "kimi-k2.6",
+  "glm-5.1",
+  "minimax-m2.7",
+  "qwen3.6-max-preview",
+  "mimo-v2.5-pro",
+  "grok-4.3",
+] as const
 
 function ChartPanelLoading() {
   return (
@@ -45,7 +69,10 @@ function getModuleDisplayLabel(label: string): string {
 
 function normalizeSelection(selected: string[], available: string[], { initial = false } = {}): string[] {
   const next = selected.filter((id) => available.includes(id))
-  if (initial && next.length === 0) return available
+  if (initial && next.length === 0) {
+    const defaultSelection = DEFAULT_SELECTED_MODEL_IDS.filter((id) => available.includes(id))
+    return defaultSelection.length > 0 ? defaultSelection : available
+  }
   return next
 }
 
@@ -61,8 +88,6 @@ export function DashboardTabs({
   loading = false,
   statefulResults,
   isolatedResults,
-  statefulManifest,
-  isolatedManifest,
 }: DashboardTabsProps) {
   const hasNoResults = statefulResults.length === 0 && isolatedResults.length === 0
 
@@ -71,17 +96,16 @@ export function DashboardTabs({
       id: String(module.id),
       moduleId: module.id,
       label: getModuleDisplayLabel(module.label),
-      sub: `${module.scenarios.length} scenarios - charts + heatmap`,
     })),
     [],
   )
   const resultTabs = useMemo(
     () => [
-      { id: "aggregate", label: "Aggregate", sub: `All models - ${ALL_MODULES.length} modules` },
-      ...moduleTabs.map(({ id, label, sub }) => ({ id, label, sub })),
-      { id: "scenario", label: "Per Scenario", sub: `${ALL_SCENARIOS.length} scenarios - Model x Scenario grid` },
-      { id: "prompt", label: "Per Prompt", sub: "L1-L5 escalation - Deep dive" },
-      { id: "prompt_no_escalation", label: "Per Prompt (No Escalation)", sub: "L1-L5 isolated prompts - Deep dive" },
+      { id: "aggregate", label: "Aggregate" },
+      ...moduleTabs.map(({ id, label }) => ({ id, label })),
+      { id: "scenario", label: "Per Scenario" },
+      { id: "prompt", label: "Per Prompt" },
+      { id: "prompt_no_escalation", label: "Per Prompt (No Escalation)" },
     ],
     [moduleTabs],
   )
@@ -115,12 +139,6 @@ export function DashboardTabs({
   )
 
   const activeTab = requestedActiveTab
-  const activeResults = activeTab === "prompt_no_escalation" ? filteredIsolatedResults : filteredStatefulResults
-  const scenarioCount = new Set(activeResults.map((row) => row.scenarioId)).size
-  const activeManifest = activeTab === "prompt_no_escalation" ? isolatedManifest : statefulManifest
-  const activeUnscorableCount = activeManifest
-    ? Math.max(0, activeManifest.summary.totalPrompts - activeManifest.summary.scoredPrompts)
-    : 0
 
   const toggleModel = (modelId: string) => {
     setHasInteracted(true)
@@ -181,9 +199,6 @@ export function DashboardTabs({
           <p className="font-mono text-xl font-black tracking-wider text-foreground uppercase">
             Benchmark Results
           </p>
-          <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
-            {activeResults.length.toLocaleString()} tests - {selectedModelIds.length}/{availableModelIds.length} models - {scenarioCount} scenarios
-          </p>
         </div>
       </div>
 
@@ -193,47 +208,6 @@ export function DashboardTabs({
         onToggleModel={toggleModel}
         onToggleAll={toggleAll}
       />
-
-      {activeManifest ? (
-        <div className="mb-8 grid gap-4 lg:grid-cols-4">
-          <Card className="border-border bg-card p-4">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Bundle</p>
-            <p className="mt-2 font-mono text-sm text-foreground">
-              {activeManifest.metadata.benchmarkDefinition?.benchmarkBundleId ?? "unknown"}
-            </p>
-            <p className="mt-1 font-mono text-[10px] uppercase text-muted-foreground">
-              Tier {activeManifest.metadata.benchmarkDefinition?.releaseTier ?? "core-public"}
-            </p>
-          </Card>
-          <Card className="border-border bg-card p-4">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Risk Slices</p>
-            <p className="mt-2 font-mono text-xs text-foreground">
-              L1-L2 {activeManifest.summary.riskSlices?.l1L2AverageDcs ?? "n/a"} / L3-L5 {activeManifest.summary.riskSlices?.l3L5AverageDcs ?? "n/a"}
-            </p>
-            <p className="mt-1 font-mono text-[10px] uppercase text-muted-foreground">
-              Reliable {activeManifest.summary.riskSlices?.reliabilityAdjustedAverageDcs ?? "n/a"}
-            </p>
-          </Card>
-          <Card className="border-border bg-card p-4">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Experiment</p>
-            <p className="mt-2 font-mono text-xs text-foreground">
-              {activeManifest.metadata.experimentId ?? "not set"}
-            </p>
-            <p className="mt-1 font-mono text-[10px] uppercase text-muted-foreground">
-              Replicates {activeManifest.metadata.replicates ?? 3}
-            </p>
-          </Card>
-          <Card className="border-border bg-card p-4">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Telemetry</p>
-            <p className="mt-2 font-mono text-xs text-foreground">
-              Cost ${activeManifest.summary.telemetry?.estimatedCostUsd.totalUsd.toFixed(2) ?? "0.00"}
-            </p>
-            <p className="mt-1 font-mono text-[10px] uppercase text-muted-foreground">
-              Scored {activeManifest.summary.scoredPrompts}/{activeManifest.summary.totalPrompts} / Unscorable {activeUnscorableCount}
-            </p>
-          </Card>
-        </div>
-      ) : null}
 
       <div className="mb-8 grid gap-1.5 [grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))]">
         {resultTabs.map((tab) => (
@@ -247,9 +221,6 @@ export function DashboardTabs({
           >
             <span className="font-mono text-xs font-bold tracking-wide uppercase">
               {tab.label}
-            </span>
-            <span className={`mt-0.5 font-mono text-[9px] leading-relaxed ${activeTab === tab.id ? "text-primary/70" : "text-muted-foreground"}`}>
-              {tab.sub}
             </span>
           </button>
         ))}
