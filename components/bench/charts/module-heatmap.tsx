@@ -249,6 +249,7 @@ export function ModuleLevelHeatmap({
       {/* Scroll hint gradient — fades the right edge on mobile to signal scrollability */}
       <div style={{ position: "relative" }}>
         <div
+          className="subtle-x-scrollbar"
           style={{
             width: "100%",
             maxWidth: "100%",

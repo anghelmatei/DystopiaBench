@@ -162,4 +162,27 @@
         hsl(0 0% 100% / 0.015) 2px,
         hsl(0 0% 100% / 0.015) 4px);
   }
+
+  .subtle-x-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.45) transparent;
+  }
+
+  .subtle-x-scrollbar::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  .subtle-x-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .subtle-x-scrollbar::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.35);
+    border: 2px solid hsl(var(--card));
+    border-radius: 999px;
+  }
+
+  .subtle-x-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.55);
+  }
 }

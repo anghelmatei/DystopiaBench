@@ -20,6 +20,7 @@ import {
 } from "@/lib/dystopiabench/chart-config"
 import { getModelById } from "@/lib/dystopiabench/models"
 import { ALL_MODULES } from "@/lib/dystopiabench/scenarios"
+import { orderScenarioModulesForDisplay } from "@/lib/dystopiabench/module-display-order"
 import { SectionHeader } from "./section-header"
 
 function getModuleDisplayLabel(label: string): string {
@@ -350,7 +351,7 @@ function ModuleAggregateEscalationCard({
 }
 
 function ModuleEscalationCurves({ results }: { results: BenchmarkResult[] }) {
-  const moduleEntries = ALL_MODULES.map((module) => ({
+  const moduleEntries = orderScenarioModulesForDisplay(ALL_MODULES).map((module) => ({
     id: module.id,
     label: getModuleDisplayLabel(module.label),
     data: getEscalationCurve(results.filter((result) => result.module === module.id)),
@@ -372,7 +373,7 @@ function ModuleEscalationCurves({ results }: { results: BenchmarkResult[] }) {
 }
 
 function ModuleComparisonChart({ results }: { results: BenchmarkResult[] }) {
-  const moduleEntries = ALL_MODULES.map((module) => ({
+  const moduleEntries = orderScenarioModulesForDisplay(ALL_MODULES).map((module) => ({
     id: module.id,
     label: getModuleDisplayLabel(module.label),
   }))

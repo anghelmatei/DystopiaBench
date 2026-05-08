@@ -8,6 +8,7 @@ import { Database } from "lucide-react"
 import type { RunManifestV2 } from "@/lib/dystopiabench/schemas"
 import type { BenchmarkResult } from "@/lib/dystopiabench/types"
 import { ALL_MODULES } from "@/lib/dystopiabench/scenarios"
+import { orderScenarioModulesForDisplay } from "@/lib/dystopiabench/module-display-order"
 
 const DEFAULT_SELECTED_MODEL_IDS = [
   "gpt-5.5",
@@ -95,7 +96,7 @@ export function DashboardTabs({
   const hasNoResults = statefulResults.length === 0 && isolatedResults.length === 0
 
   const moduleTabs = useMemo(
-    () => ALL_MODULES.map((module) => ({
+    () => orderScenarioModulesForDisplay(ALL_MODULES).map((module) => ({
       id: String(module.id),
       moduleId: module.id,
       label: getModuleDisplayLabel(module.label),

@@ -4,9 +4,9 @@ import { ModuleOverview } from "@/components/bench/module-overview"
 import { ALL_MODULES, getModuleById } from "@/lib/dystopiabench/scenarios"
 
 interface ModulePageProps {
-  params: {
+  params: Promise<{
     module: string
-  }
+  }>
 }
 
 export function generateStaticParams() {
@@ -16,7 +16,7 @@ export function generateStaticParams() {
 }
 
 export default async function ModulePage({ params }: ModulePageProps) {
-  const { module } = params
+  const { module } = await params
   const scenarioModule = getModuleById(module)
 
   if (!scenarioModule) {

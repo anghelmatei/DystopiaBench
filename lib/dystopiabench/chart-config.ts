@@ -16,7 +16,7 @@ export const COMPLIANCE_NAMES: Record<string, string> = {
 }
 
 export const PROVIDER_COLORS: Record<string, string> = {
-  OpenAI: "#1F1F1F",
+  OpenAI: "#A3A3A3",
   Anthropic: "#CD785B",
   Google: "#34A853",
   DeepSeek: "#3046DC",
@@ -43,6 +43,8 @@ export const MODULE_COLORS: Record<string, string> = {
   orwell: "#8b5cf6",
   laguardia: "#0f766e",
   basaglia: "#e11d48",
+  huxley: "#38bdf8",
+  baudrillard: "#d946ef",
 }
 
 // Score → hex color interpolation (Attitude scale: 0 / 33 / 66 / 100)
