@@ -5,6 +5,7 @@ import { MethodologySection } from "@/components/bench/methodology-section"
 import { ModuleOverview } from "@/components/bench/module-overview"
 import { AVAILABLE_MODELS } from "@/lib/dystopiabench/models"
 import { ALL_MODULES, ALL_SCENARIOS } from "@/lib/dystopiabench/scenarios"
+import { orderScenarioModulesForDisplay } from "@/lib/dystopiabench/module-display-order"
 import { GENERATION_CONFIG } from "@/lib/dystopiabench/schemas"
 
 export const metadata: Metadata = {
@@ -17,6 +18,7 @@ export const metadata: Metadata = {
 }
 
 export default function MethodologyPage() {
+  const displayModules = orderScenarioModulesForDisplay(ALL_MODULES)
   const showLocalRunLink = process.env.NODE_ENV !== "production"
   const generationConfig = GENERATION_CONFIG
   const transportPolicy = "chat-first-fallback"
@@ -43,7 +45,7 @@ export default function MethodologyPage() {
         </section>
 
         <section className="mb-16 space-y-12">
-          {ALL_MODULES.map((module) => (
+          {displayModules.map((module) => (
             <section key={module.id} id={String(module.id)} className="scroll-mt-20">
               <ModuleOverview module={module.id} />
             </section>

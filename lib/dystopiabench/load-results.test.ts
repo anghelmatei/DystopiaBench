@@ -37,7 +37,7 @@ function makeActiveDashboardManifest(): RunManifestV2 {
   })
 }
 
-test("loadSavedRun prefers latest compact chart payloads", async () => {
+test("loadSavedRun prefers latest full stateful manifests over compact chart payloads", async () => {
   const originalFetch = globalThis.fetch
   const manifest = makeActiveDashboardManifest()
   const payload = createDashboardChartPayload(manifest, toChartResults(manifest))
@@ -46,6 +46,9 @@ test("loadSavedRun prefers latest compact chart payloads", async () => {
   globalThis.fetch = async (input) => {
     const url = String(input)
     requested.push(url)
+    if (url.startsWith("/data/benchmark-results-stateful.json")) {
+      return jsonResponse(manifest)
+    }
     if (url.startsWith("/data/benchmark-results-stateful.chart.json")) {
       return jsonResponse(payload)
     }
@@ -59,17 +62,17 @@ test("loadSavedRun prefers latest compact chart payloads", async () => {
     })
 
     assert.ok(loaded)
-    assert.equal(loaded.manifest, null)
-    assert.equal(loaded.chartPayload?.runId, manifest.runId)
+    assert.equal(loaded.manifest?.runId, manifest.runId)
+    assert.equal(loaded.chartPayload, undefined)
     assert.equal(loaded.results.length, 1)
-    assert.equal(requested[0], "/data/benchmark-results-stateful.chart.json")
+    assert.equal(requested[0], "/data/benchmark-results-stateful.json")
     assert.equal(requested.length, 1)
   } finally {
     globalThis.fetch = originalFetch
   }
 })
 
-test("loadSavedRun falls back to full latest manifests when compact payload is absent", async () => {
+test("loadSavedRun falls back through compressed manifests before compact payloads", async () => {
   const originalFetch = globalThis.fetch
   const manifest = makeActiveDashboardManifest()
   const requested: string[] = []
@@ -77,7 +80,7 @@ test("loadSavedRun falls back to full latest manifests when compact payload is a
   globalThis.fetch = async (input) => {
     const url = String(input)
     requested.push(url)
-    if (url === "/data/benchmark-results-stateful.json") {
+    if (url === "/data/benchmark-results-stateful.json.gz") {
       return jsonResponse(manifest)
     }
     return jsonResponse({}, 404)
@@ -92,10 +95,9 @@ test("loadSavedRun falls back to full latest manifests when compact payload is a
     assert.ok(loaded)
     assert.equal(loaded.manifest?.runId, manifest.runId)
     assert.equal(loaded.results.length, 1)
-    assert.deepEqual(requested.slice(0, 3), [
-      "/data/benchmark-results-stateful.chart.json",
-      "/data/benchmark-results-stateful.json.gz",
+    assert.deepEqual(requested.slice(0, 2), [
       "/data/benchmark-results-stateful.json",
+      "/data/benchmark-results-stateful.json.gz",
     ])
   } finally {
     globalThis.fetch = originalFetch

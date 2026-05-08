@@ -179,9 +179,9 @@ export async function loadSavedRun(
         ]
         : latestMode === "stateful"
           ? [
-            decorateVersion("/data/benchmark-results-stateful.chart.json"),
-            decorateVersion("/data/benchmark-results-stateful.json.gz"),
             decorateVersion("/data/benchmark-results-stateful.json"),
+            decorateVersion("/data/benchmark-results-stateful.json.gz"),
+            decorateVersion("/data/benchmark-results-stateful.chart.json"),
             decorateVersion("/data/benchmark-results.json.gz"),
             decorateVersion("/data/benchmark-results.json"),
           ]

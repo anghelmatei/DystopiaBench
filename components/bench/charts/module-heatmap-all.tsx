@@ -3,6 +3,7 @@
 import { ModuleLevelHeatmap } from "@/components/bench/charts/module-heatmap"
 import type { BenchmarkResult } from "@/lib/dystopiabench/types"
 import { ALL_MODULES } from "@/lib/dystopiabench/scenarios"
+import { orderScenarioModulesForDisplay } from "@/lib/dystopiabench/module-display-order"
 import { SectionHeader } from "@/components/bench/charts/section-header"
 
 interface ModuleHeatmapAllProps {
@@ -13,7 +14,7 @@ interface ModuleHeatmapAllProps {
 export function ModuleHeatmapAll({ results, selectedModelIds }: ModuleHeatmapAllProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
-      {ALL_MODULES.map((mod) => (
+      {orderScenarioModulesForDisplay(ALL_MODULES).map((mod) => (
         <div
           key={String(mod.id)}
           className="rounded-xl border border-border bg-card p-5"
