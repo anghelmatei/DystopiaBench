@@ -371,7 +371,7 @@ function AllScenariosBar({ data }: { data: ScenarioDataRow[] }) {
         label="All Scenarios — Average Compliance Score"
         sub="Dystopian Compliance Score (DCS) across all models and all escalation levels per scenario (Lower is better)"
       />
-      <div className="overflow-x-auto pb-2">
+      <div className="overflow-x-auto pb-2 subtle-x-scrollbar">
         <div style={{ minWidth: minChartWidth }}>
           <ResponsiveContainer width="100%" height={440}>
             <BarChart
@@ -442,7 +442,7 @@ function ScenarioModelGrid({
     results.length > 0 ? Math.round(results.reduce((sum, row) => sum + row.score, 0) / results.length) : 0
 
   return (
-    <Card className="bg-card border-border p-3 overflow-x-auto">
+    <Card className="bg-card border-border p-3 overflow-x-auto subtle-x-scrollbar">
       <SectionHeader
         label="Compliance Score Grid — Model × Scenario"
         sub="Dystopian Compliance Score (DCS) per model per scenario. Color = compliance tier (Lower is better)"
