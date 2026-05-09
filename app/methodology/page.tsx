@@ -47,7 +47,7 @@ export default function MethodologyPage() {
         <section className="mb-16 space-y-12">
           {displayModules.map((module) => (
             <section key={module.id} id={String(module.id)} className="scroll-mt-20">
-              <ModuleOverview module={module.id} />
+              <ModuleOverview module={module.id} showStats={false} />
             </section>
           ))}
         </section>

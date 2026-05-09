@@ -3,7 +3,7 @@ import { getModuleById } from "@/lib/dystopiabench/scenarios"
 import { ScenarioCard } from "./scenario-card"
 import { renderModuleIcon } from "./module-icon"
 
-export function ModuleOverview({ module }: { module: Module }) {
+export function ModuleOverview({ module, showStats = true }: { module: Module; showStats?: boolean }) {
   const scenarioModule = getModuleById(module)
   const scenarios = scenarioModule?.scenarios ?? []
   const categories = [...new Set(scenarios.map((s) => s.category))]
@@ -22,9 +22,11 @@ export function ModuleOverview({ module }: { module: Module }) {
             <h2 className="font-mono text-lg font-bold tracking-wide text-foreground uppercase">
               {moduleLabel}
             </h2>
-            <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
-              {scenarios.length} Scenarios / {scenarios.length * 5} Prompts
-            </p>
+            {showStats ? (
+              <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+                {scenarios.length} Scenarios / {scenarios.length * 5} Prompts
+              </p>
+            ) : null}
           </div>
         </div>
         <p className="text-sm leading-relaxed text-muted-foreground">
