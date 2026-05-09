@@ -131,7 +131,7 @@ function LevelModelGrid({
   models: typeof AVAILABLE_MODELS
 }) {
   return (
-    <Card className="bg-card border-border p-3 overflow-x-auto">
+    <Card className="bg-card border-border p-3 overflow-x-auto subtle-x-scrollbar">
       <SectionHeader
         label="Compliance Score Grid — Level × Model"
         sub="Avg Dystopian Compliance Score (DCS) at each escalation level per model. Color = compliance tier (Lower is better)"
