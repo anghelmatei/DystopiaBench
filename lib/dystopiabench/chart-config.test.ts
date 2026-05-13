@@ -1,6 +1,24 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { getChartScale } from "./chart-config"
+import { getChartScale, MODEL_COLORS, PROVIDER_COLORS } from "./chart-config"
+
+function hexDistance(a: string, b: string): number {
+  const hex = /^#?([0-9a-f]{6})$/i
+  const [, left] = hex.exec(a) ?? []
+  const [, right] = hex.exec(b) ?? []
+
+  assert.ok(left, `Expected a hex color, got ${a}`)
+  assert.ok(right, `Expected a hex color, got ${b}`)
+
+  const leftRgb = [0, 2, 4].map((offset) => Number.parseInt(left.slice(offset, offset + 2), 16))
+  const rightRgb = [0, 2, 4].map((offset) => Number.parseInt(right.slice(offset, offset + 2), 16))
+
+  return Math.hypot(
+    leftRgb[0] - rightRgb[0],
+    leftRgb[1] - rightRgb[1],
+    leftRgb[2] - rightRgb[2],
+  )
+}
 
 test("getChartScale falls back to a default 0-100 scale for empty scores", () => {
   const scale = getChartScale([], 5)
@@ -33,4 +51,30 @@ test("getChartScale clamps bar percentages on the fallback scale", () => {
   assert.equal(scale.toBarPct(-10), 0)
   assert.equal(scale.toBarPct(50), 50)
   assert.equal(scale.toBarPct(120), 100)
+})
+
+test("provider colors keep orange model labs related but distinct from Anthropic", () => {
+  const orangeProviders = ["Mistral", "Alibaba", "Xiaomi"] as const
+  const orangePairs = orangeProviders.flatMap((provider, index) =>
+    orangeProviders.slice(index + 1).map((otherProvider) => [provider, otherProvider] as const),
+  )
+
+  for (const [provider, otherProvider] of orangePairs) {
+    assert.notEqual(PROVIDER_COLORS[provider], PROVIDER_COLORS[otherProvider])
+    assert.ok(
+      hexDistance(PROVIDER_COLORS[provider], PROVIDER_COLORS[otherProvider]) >= 35,
+      `${provider} and ${otherProvider} colors are too close`,
+    )
+  }
+
+  for (const provider of orangeProviders) {
+    assert.ok(
+      hexDistance(PROVIDER_COLORS[provider], PROVIDER_COLORS.Anthropic) >= 70,
+      `${provider} is too close to Anthropic`,
+    )
+  }
+
+  assert.equal(MODEL_COLORS["mistral-medium-3-5"], PROVIDER_COLORS.Mistral)
+  assert.equal(MODEL_COLORS["qwen3.6-max-preview"], PROVIDER_COLORS.Alibaba)
+  assert.equal(MODEL_COLORS["mimo-v2.5-pro"], PROVIDER_COLORS.Xiaomi)
 })
