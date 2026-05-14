@@ -59,6 +59,22 @@ function moduleHeatmapTextColor(score: number): string {
   return luminance > 0.48 ? "#0a0a0a" : "#f5f5f5"
 }
 
+function DcsGradientLegend({ className = "" }: { className?: string }) {
+  return (
+    <div className={`flex flex-wrap items-center gap-2 font-mono text-[10px] text-muted-foreground ${className}`}>
+      <span>Low DCS (better)</span>
+      <div
+        className="h-2 w-40 rounded"
+        style={{
+          background:
+            "linear-gradient(90deg, rgb(56, 184, 85), rgb(255, 210, 50), rgb(240, 130, 20), rgb(195, 30, 28))",
+        }}
+      />
+      <span>High DCS (worse)</span>
+    </div>
+  )
+}
+
 function ModelBarTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: { label: string; avgScore: number; provider: string } }> }) {
   if (!active || !payload?.length) return null
   const d = payload[0].payload
@@ -405,7 +421,7 @@ function ModuleEscalationCurves({ results }: { results: BenchmarkResult[] }) {
 }
 
 function ModuleComparisonChart({ results }: { results: BenchmarkResult[] }) {
-  const [view, setView] = useState<"heatmap" | "module-bars">("heatmap")
+  const [view, setView] = useState<"heatmap" | "module-bars">("module-bars")
   const [sortKey, setSortKey] = useState<string>("avg")
   const moduleEntries = useMemo(
     () =>
@@ -612,77 +628,70 @@ function ModuleComparisonChart({ results }: { results: BenchmarkResult[] }) {
               ))}
             </tbody>
           </table>
-          <div className="mt-4 flex flex-wrap items-center gap-2 font-mono text-[10px] text-muted-foreground">
-            <span>Low DCS (better)</span>
-            <div
-              className="h-2 w-40 rounded"
-              style={{
-                background:
-                  "linear-gradient(90deg, rgb(56, 184, 85), rgb(255, 210, 50), rgb(240, 130, 20), rgb(195, 30, 28))",
-              }}
-            />
-            <span>High DCS (worse)</span>
-          </div>
+          <DcsGradientLegend className="mt-4" />
         </div>
       ) : (
-        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {moduleEntries.map((moduleEntry) => {
-            const rows = modelEntries
-              .map((modelEntry) => ({
-                id: modelEntry.id,
-                label: modelEntry.label,
-                score: modelEntry.moduleScores.get(String(moduleEntry.id)) ?? null,
-              }))
-              .sort((left, right) => {
-                if (left.score == null && right.score == null) return left.label.localeCompare(right.label)
-                if (left.score == null) return 1
-                if (right.score == null) return -1
-                return left.score - right.score || left.label.localeCompare(right.label)
-              })
+        <div className="mt-5">
+          <DcsGradientLegend className="mb-4" />
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {moduleEntries.map((moduleEntry) => {
+              const rows = modelEntries
+                .map((modelEntry) => ({
+                  id: modelEntry.id,
+                  label: modelEntry.label,
+                  score: modelEntry.moduleScores.get(String(moduleEntry.id)) ?? null,
+                }))
+                .sort((left, right) => {
+                  if (left.score == null && right.score == null) return left.label.localeCompare(right.label)
+                  if (left.score == null) return 1
+                  if (right.score == null) return -1
+                  return left.score - right.score || left.label.localeCompare(right.label)
+                })
 
-            return (
-              <div key={moduleEntry.id} className="rounded-lg border border-border bg-background/35 p-3">
-                <p className="mb-3 font-mono text-[11px] font-bold uppercase tracking-wide text-foreground">
-                  {moduleEntry.label}
-                </p>
-                <div className="flex flex-col gap-1.5">
-                  {rows.map((row) => {
-                    const score = row.score
-                    const width = score == null ? 0 : clampScore(score)
+              return (
+                <div key={moduleEntry.id} className="rounded-lg border border-border bg-background/35 p-3">
+                  <p className="mb-3 font-mono text-[11px] font-bold uppercase tracking-wide text-foreground">
+                    {moduleEntry.label}
+                  </p>
+                  <div className="flex flex-col gap-1.5">
+                    {rows.map((row) => {
+                      const score = row.score
+                      const width = score == null ? 0 : clampScore(score)
 
-                    return (
-                      <div key={row.id} className="flex min-w-0 items-center gap-2">
-                        <span
-                          className="w-28 shrink-0 truncate font-mono text-[10px] text-muted-foreground"
-                          title={row.label}
-                        >
-                          {row.label}
-                        </span>
-                        <div
-                          className="h-4 min-w-0 flex-1 overflow-hidden rounded bg-muted/35"
-                          title={getCellTitle(row.label, moduleEntry.label, score)}
-                        >
-                          {score == null ? null : (
-                            <div
-                              className="flex h-full items-center justify-end rounded px-1 font-mono text-[9px] font-bold"
-                              style={{
-                                width: `${width}%`,
-                                minWidth: "1.75rem",
-                                background: moduleHeatmapColor(score),
-                                color: moduleHeatmapTextColor(score),
-                              }}
-                            >
-                              {score}
-                            </div>
-                          )}
+                      return (
+                        <div key={row.id} className="flex min-w-0 items-center gap-2">
+                          <span
+                            className="w-28 shrink-0 truncate font-mono text-[10px] text-muted-foreground"
+                            title={row.label}
+                          >
+                            {row.label}
+                          </span>
+                          <div
+                            className="h-4 min-w-0 flex-1 overflow-hidden rounded bg-muted/35"
+                            title={getCellTitle(row.label, moduleEntry.label, score)}
+                          >
+                            {score == null ? null : (
+                              <div
+                                className="flex h-full items-center justify-end rounded px-1 font-mono text-[9px] font-bold"
+                                style={{
+                                  width: `${width}%`,
+                                  minWidth: "1.75rem",
+                                  background: moduleHeatmapColor(score),
+                                  color: moduleHeatmapTextColor(score),
+                                }}
+                              >
+                                {score}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
       )}
     </Card>
