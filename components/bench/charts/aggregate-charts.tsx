@@ -1,8 +1,9 @@
 "use client"
 
+import { useMemo, useState } from "react"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, Legend, RadarChart, Radar,
+  LineChart, Line, RadarChart, Radar,
   PolarGrid, PolarAngleAxis, PolarRadiusAxis, Cell,
 } from "recharts"
 import { Card } from "@/components/ui/card"
@@ -16,7 +17,7 @@ import {
 } from "@/lib/dystopiabench/analytics"
 import {
   MODEL_COLORS,
-  MODULE_COLORS, scoreColor, scoreLabel, LEVEL_LABELS, getResponsiveBarChartLayout,
+  scoreColor, scoreLabel, LEVEL_LABELS, getResponsiveBarChartLayout,
 } from "@/lib/dystopiabench/chart-config"
 import { getModelById } from "@/lib/dystopiabench/models"
 import { ALL_MODULES } from "@/lib/dystopiabench/scenarios"
@@ -25,6 +26,37 @@ import { SectionHeader } from "./section-header"
 
 function getModuleDisplayLabel(label: string): string {
   return label.replace(/\s+Module$/i, "")
+}
+
+function clampScore(score: number): number {
+  return Math.max(0, Math.min(100, score))
+}
+
+function lerp(start: number, end: number, amount: number): number {
+  return Math.round(start + (end - start) * amount)
+}
+
+function moduleHeatmapColor(score: number): string {
+  const t = Math.max(0, Math.min(1, (score - 15) / 80))
+
+  if (t < 0.4) {
+    const s = t / 0.4
+    return `rgb(${lerp(56, 255, s)}, ${lerp(184, 210, s)}, ${lerp(85, 50, s)})`
+  }
+
+  if (t < 0.7) {
+    const s = (t - 0.4) / 0.3
+    return `rgb(${lerp(255, 240, s)}, ${lerp(210, 130, s)}, ${lerp(50, 20, s)})`
+  }
+
+  const s = (t - 0.7) / 0.3
+  return `rgb(${lerp(240, 195, s)}, ${lerp(130, 30, s)}, ${lerp(20, 28, s)})`
+}
+
+function moduleHeatmapTextColor(score: number): string {
+  const color = moduleHeatmapColor(score).match(/\d+/g)?.map(Number) ?? [0, 0, 0]
+  const luminance = (0.299 * color[0] + 0.587 * color[1] + 0.114 * color[2]) / 255
+  return luminance > 0.48 ? "#0a0a0a" : "#f5f5f5"
 }
 
 function ModelBarTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: { label: string; avgScore: number; provider: string } }> }) {
@@ -373,101 +405,286 @@ function ModuleEscalationCurves({ results }: { results: BenchmarkResult[] }) {
 }
 
 function ModuleComparisonChart({ results }: { results: BenchmarkResult[] }) {
-  const moduleEntries = orderScenarioModulesForDisplay(ALL_MODULES).map((module) => ({
-    id: module.id,
-    label: getModuleDisplayLabel(module.label),
-  }))
+  const [view, setView] = useState<"heatmap" | "module-bars">("heatmap")
+  const [sortKey, setSortKey] = useState<string>("avg")
+  const moduleEntries = useMemo(
+    () =>
+      orderScenarioModulesForDisplay(ALL_MODULES).map((module) => ({
+        id: module.id,
+        label: getModuleDisplayLabel(module.label),
+      })),
+    [],
+  )
 
-  const modelIds = [...new Set(results.map((result) => result.modelId))]
-  const data = modelIds.map((id) => {
-    const model = getModelById(id)
-    const row: Record<string, string | number> = { label: model?.label ?? id }
-    for (const moduleEntry of moduleEntries) {
-      const moduleRows = results.filter((result) => result.modelId === id && result.module === moduleEntry.id)
-      row[moduleEntry.id] = moduleRows.length
-        ? Math.round(moduleRows.reduce((sum, result) => sum + result.score, 0) / moduleRows.length)
-        : 0
+  const modelEntries = useMemo(() => {
+    const modelIds = [...new Set(results.map((result) => result.modelId))]
+
+    return modelIds.map((id) => {
+      const model = getModelById(id)
+      const allModelRows = results.filter((result) => result.modelId === id)
+      const moduleScores = new Map<string, number>()
+
+      for (const moduleEntry of moduleEntries) {
+        const moduleRows = allModelRows.filter((result) => result.module === moduleEntry.id)
+        if (moduleRows.length > 0) {
+          moduleScores.set(
+            String(moduleEntry.id),
+            Math.round(moduleRows.reduce((sum, result) => sum + result.score, 0) / moduleRows.length),
+          )
+        }
+      }
+
+      return {
+        id,
+        label: model?.label ?? id,
+        provider: model?.provider ?? allModelRows[0]?.provider ?? "Unknown",
+        avgScore: allModelRows.length
+          ? Math.round(allModelRows.reduce((sum, result) => sum + result.score, 0) / allModelRows.length)
+          : null,
+        moduleScores,
+      }
+    })
+  }, [moduleEntries, results])
+
+  const sortedModelEntries = useMemo(() => {
+    return modelEntries.slice().sort((left, right) => {
+      const leftScore = sortKey === "avg" ? left.avgScore : left.moduleScores.get(sortKey)
+      const rightScore = sortKey === "avg" ? right.avgScore : right.moduleScores.get(sortKey)
+
+      if (leftScore == null && rightScore == null) return left.label.localeCompare(right.label)
+      if (leftScore == null) return 1
+      if (rightScore == null) return -1
+      return leftScore - rightScore || left.label.localeCompare(right.label)
+    })
+  }, [modelEntries, sortKey])
+
+  const moduleAverages = useMemo(() => {
+    return new Map(
+      moduleEntries.map((moduleEntry) => {
+        const values = modelEntries
+          .map((modelEntry) => modelEntry.moduleScores.get(String(moduleEntry.id)))
+          .filter((score): score is number => typeof score === "number")
+
+        return [
+          String(moduleEntry.id),
+          values.length
+            ? Math.round(values.reduce((sum, score) => sum + score, 0) / values.length)
+            : null,
+        ]
+      }),
+    )
+  }, [modelEntries, moduleEntries])
+
+  const getCellTitle = (modelLabel: string, moduleLabel: string, score: number | null) => {
+    if (score == null) return `${modelLabel} | ${moduleLabel}: no data`
+    return `${modelLabel} | ${moduleLabel}: ${score} DCS (lower is better)`
+  }
+
+  const renderScoreCell = (key: string, score: number | null, title: string) => {
+    if (score == null) {
+      return (
+        <td
+          key={key}
+          className="h-9 w-20 min-w-20 max-w-20 rounded bg-muted/25 text-center font-mono text-[10px] text-muted-foreground"
+          title={title}
+        >
+          -
+        </td>
+      )
     }
-    return row
-  })
-  const barLayout = getResponsiveBarChartLayout({
-    categoryCount: data.length,
-    seriesCount: moduleEntries.length,
-  })
+
+    return (
+      <td
+        key={key}
+        className="h-9 w-20 min-w-20 max-w-20 rounded text-center font-mono text-[11px] font-bold transition-transform duration-100 hover:relative hover:z-10 hover:scale-110"
+        style={{
+          background: moduleHeatmapColor(score),
+          color: moduleHeatmapTextColor(score),
+        }}
+        title={title}
+      >
+        {score}
+      </td>
+    )
+  }
 
   return (
     <Card className="bg-card border-border p-5">
-      <SectionHeader
-        label="Module Breakdown by Model"
-        sub="Average Dystopian Compliance Score (DCS) per module per model (Lower is better)"
-      />
-      <div className="h-[320px] md:h-[460px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={data}
-            margin={{ left: 8, right: 12, top: 8, bottom: 76 }}
-            barGap={barLayout.barGap}
-            barCategoryGap={barLayout.barCategoryGap}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <SectionHeader
+          label="Module Breakdown by Model"
+          sub="Average Dystopian Compliance Score (DCS) per module per model (Lower is better)"
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="module-comparison-sort" className="font-mono text-[10px] text-muted-foreground">
+            Sort by
+          </label>
+          <select
+            id="module-comparison-sort"
+            value={sortKey}
+            onChange={(event) => setSortKey(event.target.value)}
+            disabled={view !== "heatmap"}
+            className="h-7 rounded border border-border bg-background px-2 font-mono text-[10px] text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-            <XAxis
-              dataKey="label"
-              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9, fontFamily: "var(--font-mono)" }}
-              axisLine={{ stroke: "hsl(var(--border))" }}
-              tickLine={false}
-              angle={-32}
-              textAnchor="end"
-              interval={0}
-              height={72}
-            />
-            <YAxis
-              domain={[0, 100]}
-              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10, fontFamily: "var(--font-mono)" }}
-              axisLine={false}
-              tickLine={false}
-              width={32}
-            />
-            <Tooltip
-              cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }}
-              content={({ active, payload }) => {
-                if (!active || !payload?.length) return null
-                const d = payload[0].payload as Record<string, string | number>
-                return (
-                  <div className="rounded-md border border-border bg-card px-3 py-2 shadow-lg">
-                    <p className="mb-2 font-mono text-xs font-bold text-foreground">{String(d.label)}</p>
-                    {moduleEntries.map((module) => {
-                      const value = Number(d[module.id] ?? 0)
-                      return (
-                        <div key={module.id} className="mb-0.5 flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-1.5">
-                            <div className="h-2 w-2 rounded-full" style={{ background: MODULE_COLORS[module.id] ?? "#888" }} />
-                            <span className="font-mono text-[10px] text-muted-foreground">{module.label}</span>
-                          </div>
-                          <span className="font-mono text-[10px] font-bold" style={{ color: scoreColor(value) }}>{value}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )
+            <option value="avg">Avg score</option>
+            {moduleEntries.map((moduleEntry) => (
+              <option key={moduleEntry.id} value={String(moduleEntry.id)}>
+                {moduleEntry.label}
+              </option>
+            ))}
+          </select>
+          <div className="flex rounded border border-border p-0.5">
+            <button
+              type="button"
+              onClick={() => setView("heatmap")}
+              className={`h-6 rounded px-2 font-mono text-[10px] transition-colors ${
+                view === "heatmap"
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Heatmap
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("module-bars")}
+              className={`h-6 rounded px-2 font-mono text-[10px] transition-colors ${
+                view === "module-bars"
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              By Module
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {view === "heatmap" ? (
+        <div className="mt-5 overflow-x-auto subtle-x-scrollbar">
+          <table className="w-max border-separate border-spacing-1 table-fixed">
+            <thead>
+              <tr>
+                <th className="w-36 pb-2 text-left align-bottom font-mono text-[10px] font-medium text-muted-foreground" />
+                {sortedModelEntries.map((modelEntry) => (
+                  <th
+                    key={modelEntry.id}
+                    className="h-24 w-20 min-w-20 max-w-20 pb-3 text-center align-bottom"
+                    title={`${modelEntry.label} | ${modelEntry.provider}`}
+                  >
+                    <span className="inline-block origin-bottom-left -rotate-45 whitespace-nowrap font-mono text-[10px] font-medium text-muted-foreground">
+                      {modelEntry.label}
+                    </span>
+                  </th>
+                ))}
+                <th className="h-24 w-20 min-w-20 max-w-20 pb-3 text-center align-bottom">
+                  <span className="inline-block origin-bottom-left -rotate-45 whitespace-nowrap font-mono text-[10px] font-medium text-muted-foreground">
+                    Avg
+                  </span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {moduleEntries.map((moduleEntry) => (
+                <tr key={moduleEntry.id}>
+                  <th className="w-36 pr-3 text-left align-middle font-mono text-[11px] font-semibold uppercase tracking-wide text-foreground">
+                    {moduleEntry.label}
+                  </th>
+                  {sortedModelEntries.map((modelEntry) =>
+                    renderScoreCell(
+                      `${moduleEntry.id}-${modelEntry.id}`,
+                      modelEntry.moduleScores.get(String(moduleEntry.id)) ?? null,
+                      getCellTitle(
+                        modelEntry.label,
+                        moduleEntry.label,
+                        modelEntry.moduleScores.get(String(moduleEntry.id)) ?? null,
+                      ),
+                    )
+                  )}
+                  {renderScoreCell(
+                    `${moduleEntry.id}-avg`,
+                    moduleAverages.get(String(moduleEntry.id)) ?? null,
+                    `${moduleEntry.label} average: ${
+                      moduleAverages.get(String(moduleEntry.id)) ?? "no data"
+                    } DCS (lower is better)`,
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="mt-4 flex flex-wrap items-center gap-2 font-mono text-[10px] text-muted-foreground">
+            <span>Low DCS (better)</span>
+            <div
+              className="h-2 w-40 rounded"
+              style={{
+                background:
+                  "linear-gradient(90deg, rgb(56, 184, 85), rgb(255, 210, 50), rgb(240, 130, 20), rgb(195, 30, 28))",
               }}
             />
-            <Legend
-              wrapperStyle={{ fontFamily: "var(--font-mono)", fontSize: 10, paddingTop: 12 }}
-              formatter={(value) => <span style={{ color: "hsl(var(--muted-foreground))", textTransform: "uppercase" }}>{value}</span>}
-            />
-            {moduleEntries.map((module) => (
-              <Bar
-                key={module.id}
-                dataKey={module.id}
-                name={module.label}
-                fill={MODULE_COLORS[module.id] ?? "#888"}
-                radius={[3, 3, 0, 0]}
-                barSize={barLayout.barSize}
-              />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+            <span>High DCS (worse)</span>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {moduleEntries.map((moduleEntry) => {
+            const rows = modelEntries
+              .map((modelEntry) => ({
+                id: modelEntry.id,
+                label: modelEntry.label,
+                score: modelEntry.moduleScores.get(String(moduleEntry.id)) ?? null,
+              }))
+              .sort((left, right) => {
+                if (left.score == null && right.score == null) return left.label.localeCompare(right.label)
+                if (left.score == null) return 1
+                if (right.score == null) return -1
+                return left.score - right.score || left.label.localeCompare(right.label)
+              })
+
+            return (
+              <div key={moduleEntry.id} className="rounded-lg border border-border bg-background/35 p-3">
+                <p className="mb-3 font-mono text-[11px] font-bold uppercase tracking-wide text-foreground">
+                  {moduleEntry.label}
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  {rows.map((row) => {
+                    const score = row.score
+                    const width = score == null ? 0 : clampScore(score)
+
+                    return (
+                      <div key={row.id} className="flex min-w-0 items-center gap-2">
+                        <span
+                          className="w-28 shrink-0 truncate font-mono text-[10px] text-muted-foreground"
+                          title={row.label}
+                        >
+                          {row.label}
+                        </span>
+                        <div
+                          className="h-4 min-w-0 flex-1 overflow-hidden rounded bg-muted/35"
+                          title={getCellTitle(row.label, moduleEntry.label, score)}
+                        >
+                          {score == null ? null : (
+                            <div
+                              className="flex h-full items-center justify-end rounded px-1 font-mono text-[9px] font-bold"
+                              style={{
+                                width: `${width}%`,
+                                minWidth: "1.75rem",
+                                background: moduleHeatmapColor(score),
+                                color: moduleHeatmapTextColor(score),
+                              }}
+                            >
+                              {score}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </Card>
   )
 }
