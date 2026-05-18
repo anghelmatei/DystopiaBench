@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { Fragment, useMemo, useState } from "react"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, RadarChart, Radar,
@@ -54,11 +54,7 @@ function moduleHeatmapColor(score: number): string {
   return `rgb(${lerp(240, 195, s)}, ${lerp(130, 30, s)}, ${lerp(20, 28, s)})`
 }
 
-function moduleHeatmapTextColor(score: number): string {
-  const color = moduleHeatmapColor(score).match(/\d+/g)?.map(Number) ?? [0, 0, 0]
-  const luminance = (0.299 * color[0] + 0.587 * color[1] + 0.114 * color[2]) / 255
-  return luminance > 0.48 ? "#0a0a0a" : "#f5f5f5"
-}
+const MODULE_HEATMAP_TEXT_COLOR = "#0a0a0a"
 
 function DcsGradientLegend({ className = "" }: { className?: string }) {
   return (
@@ -475,53 +471,38 @@ function ModuleComparisonChart({ results }: { results: BenchmarkResult[] }) {
     })
   }, [modelEntries, sortKey])
 
-  const moduleAverages = useMemo(() => {
-    return new Map(
-      moduleEntries.map((moduleEntry) => {
-        const values = modelEntries
-          .map((modelEntry) => modelEntry.moduleScores.get(String(moduleEntry.id)))
-          .filter((score): score is number => typeof score === "number")
-
-        return [
-          String(moduleEntry.id),
-          values.length
-            ? Math.round(values.reduce((sum, score) => sum + score, 0) / values.length)
-            : null,
-        ]
-      }),
-    )
-  }, [modelEntries, moduleEntries])
-
   const getCellTitle = (modelLabel: string, moduleLabel: string, score: number | null) => {
     if (score == null) return `${modelLabel} | ${moduleLabel}: no data`
     return `${modelLabel} | ${moduleLabel}: ${score} DCS (lower is better)`
   }
 
+  const heatmapCellSize = `clamp(3rem, calc((100vw - 14rem) / ${Math.max(moduleEntries.length, 1)}), 5rem)`
+
   const renderScoreCell = (key: string, score: number | null, title: string) => {
     if (score == null) {
       return (
-        <td
+        <div
           key={key}
-          className="h-9 w-20 min-w-20 max-w-20 rounded bg-muted/25 text-center font-mono text-[10px] text-muted-foreground"
+          className="flex aspect-square w-full items-center justify-center rounded bg-muted/25 font-mono text-[10px] text-muted-foreground"
           title={title}
         >
           -
-        </td>
+        </div>
       )
     }
 
     return (
-      <td
+      <div
         key={key}
-        className="h-9 w-20 min-w-20 max-w-20 rounded text-center font-mono text-[11px] font-bold transition-transform duration-100 hover:relative hover:z-10 hover:scale-110"
+        className="flex aspect-square w-full items-center justify-center rounded font-mono text-[11px] font-bold"
         style={{
           background: moduleHeatmapColor(score),
-          color: moduleHeatmapTextColor(score),
+          color: MODULE_HEATMAP_TEXT_COLOR,
         }}
         title={title}
       >
         {score}
-      </td>
+      </div>
     )
   }
 
@@ -533,35 +514,27 @@ function ModuleComparisonChart({ results }: { results: BenchmarkResult[] }) {
           sub="Average Dystopian Compliance Score (DCS) per module per model (Lower is better)"
         />
         <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor="module-comparison-sort" className="font-mono text-[10px] text-muted-foreground">
-            Sort by
-          </label>
-          <select
-            id="module-comparison-sort"
-            value={sortKey}
-            onChange={(event) => setSortKey(event.target.value)}
-            disabled={view !== "heatmap"}
-            className="h-7 rounded border border-border bg-background px-2 font-mono text-[10px] text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="avg">Avg score</option>
-            {moduleEntries.map((moduleEntry) => (
-              <option key={moduleEntry.id} value={String(moduleEntry.id)}>
-                {moduleEntry.label}
-              </option>
-            ))}
-          </select>
+          {view === "heatmap" ? (
+            <>
+              <label htmlFor="module-comparison-sort" className="font-mono text-[10px] text-muted-foreground">
+                Sort by
+              </label>
+              <select
+                id="module-comparison-sort"
+                value={sortKey}
+                onChange={(event) => setSortKey(event.target.value)}
+                className="h-7 rounded border border-border bg-background px-2 font-mono text-[10px] text-muted-foreground"
+              >
+                <option value="avg">Avg score</option>
+                {moduleEntries.map((moduleEntry) => (
+                  <option key={moduleEntry.id} value={String(moduleEntry.id)}>
+                    {moduleEntry.label}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : null}
           <div className="flex rounded border border-border p-0.5">
-            <button
-              type="button"
-              onClick={() => setView("heatmap")}
-              className={`h-6 rounded px-2 font-mono text-[10px] transition-colors ${
-                view === "heatmap"
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Heatmap
-            </button>
             <button
               type="button"
               onClick={() => setView("module-bars")}
@@ -573,43 +546,52 @@ function ModuleComparisonChart({ results }: { results: BenchmarkResult[] }) {
             >
               By Module
             </button>
+            <button
+              type="button"
+              onClick={() => setView("heatmap")}
+              className={`h-6 rounded px-2 font-mono text-[10px] transition-colors ${
+                view === "heatmap"
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Heatmap
+            </button>
           </div>
         </div>
       </div>
 
       {view === "heatmap" ? (
-        <div className="mt-5 overflow-x-auto subtle-x-scrollbar">
-          <table className="w-max border-separate border-spacing-1 table-fixed">
-            <thead>
-              <tr>
-                <th className="w-36 pb-2 text-left align-bottom font-mono text-[10px] font-medium text-muted-foreground" />
-                {sortedModelEntries.map((modelEntry) => (
-                  <th
-                    key={modelEntry.id}
-                    className="h-24 w-20 min-w-20 max-w-20 pb-3 text-center align-bottom"
+        <div className="mt-5">
+          <DcsGradientLegend className="mb-4" />
+          <div className="overflow-x-auto subtle-x-scrollbar pb-2">
+            <div
+              className="grid w-max gap-1"
+              style={{
+                gridTemplateColumns: `minmax(7.5rem, 10rem) repeat(${moduleEntries.length}, ${heatmapCellSize})`,
+              }}
+            >
+              <div className="sticky left-0 z-10 bg-card" />
+              {moduleEntries.map((moduleEntry) => (
+                <div
+                  key={moduleEntry.id}
+                  className="flex h-14 items-end justify-center pb-2 text-center font-mono text-[10px] font-semibold uppercase leading-tight text-muted-foreground"
+                  title={moduleEntry.label}
+                >
+                  {moduleEntry.label}
+                </div>
+              ))}
+              {sortedModelEntries.map((modelEntry) => (
+                <Fragment key={modelEntry.id}>
+                  <div
+                    className="sticky left-0 z-10 flex min-h-12 items-center bg-card pr-3 font-mono text-[11px] font-semibold text-foreground"
                     title={`${modelEntry.label} | ${modelEntry.provider}`}
                   >
-                    <span className="inline-block origin-bottom-left -rotate-45 whitespace-nowrap font-mono text-[10px] font-medium text-muted-foreground">
-                      {modelEntry.label}
-                    </span>
-                  </th>
-                ))}
-                <th className="h-24 w-20 min-w-20 max-w-20 pb-3 text-center align-bottom">
-                  <span className="inline-block origin-bottom-left -rotate-45 whitespace-nowrap font-mono text-[10px] font-medium text-muted-foreground">
-                    Avg
-                  </span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {moduleEntries.map((moduleEntry) => (
-                <tr key={moduleEntry.id}>
-                  <th className="w-36 pr-3 text-left align-middle font-mono text-[11px] font-semibold uppercase tracking-wide text-foreground">
-                    {moduleEntry.label}
-                  </th>
-                  {sortedModelEntries.map((modelEntry) =>
+                    <span className="truncate">{modelEntry.label}</span>
+                  </div>
+                  {moduleEntries.map((moduleEntry) =>
                     renderScoreCell(
-                      `${moduleEntry.id}-${modelEntry.id}`,
+                      `${modelEntry.id}-${moduleEntry.id}`,
                       modelEntry.moduleScores.get(String(moduleEntry.id)) ?? null,
                       getCellTitle(
                         modelEntry.label,
@@ -618,18 +600,10 @@ function ModuleComparisonChart({ results }: { results: BenchmarkResult[] }) {
                       ),
                     )
                   )}
-                  {renderScoreCell(
-                    `${moduleEntry.id}-avg`,
-                    moduleAverages.get(String(moduleEntry.id)) ?? null,
-                    `${moduleEntry.label} average: ${
-                      moduleAverages.get(String(moduleEntry.id)) ?? "no data"
-                    } DCS (lower is better)`,
-                  )}
-                </tr>
+                </Fragment>
               ))}
-            </tbody>
-          </table>
-          <DcsGradientLegend className="mt-4" />
+            </div>
+          </div>
         </div>
       ) : (
         <div className="mt-5">
@@ -678,7 +652,7 @@ function ModuleComparisonChart({ results }: { results: BenchmarkResult[] }) {
                                   width: `${width}%`,
                                   minWidth: "1.75rem",
                                   background: moduleHeatmapColor(score),
-                                  color: moduleHeatmapTextColor(score),
+                                  color: MODULE_HEATMAP_TEXT_COLOR,
                                 }}
                               >
                                 {score}
