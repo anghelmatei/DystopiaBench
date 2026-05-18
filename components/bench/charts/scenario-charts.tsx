@@ -15,7 +15,7 @@ import {
 } from "recharts"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ALL_SCENARIOS } from "@/lib/dystopiabench/scenarios"
+import { ALL_MODULES, ALL_SCENARIOS } from "@/lib/dystopiabench/scenarios"
 import { AVAILABLE_MODELS } from "@/lib/dystopiabench/models"
 import type { BenchmarkResult, Module } from "@/lib/dystopiabench/types"
 import { MODEL_COLORS, scoreColor, scoreLabel, LEVEL_LABELS, getResponsiveBarChartLayout } from "@/lib/dystopiabench/chart-config"
@@ -34,6 +34,8 @@ const TOOLTIP_STYLE = {
 
 const SCENARIO_TICK_MAX_LINE_LENGTH = 16
 const SCENARIO_TICK_MAX_LINES = 3
+const SCENARIO_Y_TICK_MAX_LINE_LENGTH = 28
+const SCENARIO_Y_TICK_MAX_LINES = 2
 function scenarioLevelKey(scenarioId: string, level: number): string {
   return `${scenarioId}::${level}`
 }
@@ -73,20 +75,21 @@ function wrapTickLabel(value: string, maxLineLength = SCENARIO_TICK_MAX_LINE_LEN
   return visibleLines
 }
 
-function WrappedTick({
-  x,
-  y,
-  value,
+function WrappedYAxisTick({
+  x = 0,
+  y = 0,
+  payload,
   fontSize,
-  lineHeight = 12,
+  lineHeight = 11,
 }: {
-  x: number
-  y: number
-  value: string
+  x?: number
+  y?: number
+  payload?: { value: string }
   fontSize: number
   lineHeight?: number
 }) {
-  const lines = wrapTickLabel(value)
+  const value = payload?.value ?? ""
+  const lines = wrapTickLabel(value, SCENARIO_Y_TICK_MAX_LINE_LENGTH, SCENARIO_Y_TICK_MAX_LINES)
 
   return (
     <g transform={`translate(${x},${y})`}>
@@ -95,8 +98,8 @@ function WrappedTick({
           key={`${value}-${index}`}
           x={0}
           y={0}
-          dy={12 + index * lineHeight}
-          textAnchor="middle"
+          dy={(index - (lines.length - 1) / 2) * lineHeight + 3}
+          textAnchor="end"
           fill="hsl(var(--muted-foreground))"
           fontSize={fontSize}
           fontFamily="var(--font-mono)"
@@ -359,16 +362,14 @@ function ScenarioDetailPanel({
 }
 
 function AllScenariosBar({ data }: { data: ScenarioDataRow[] }) {
-  const chartData = data.map((row) => ({
-    id: row.scenario.id,
-    title: row.scenario.title,
-    avg: row.avgAll,
-  }))
-  const barLayout = getResponsiveBarChartLayout({
-    categoryCount: chartData.length,
-    scrollable: true,
-  })
-  const minChartWidth = barLayout.minChartWidth ?? 960
+  const chartData = data
+    .map((row) => ({
+      id: row.scenario.id,
+      title: row.scenario.title,
+      avg: row.avgAll,
+    }))
+    .sort((a, b) => a.avg - b.avg || a.title.localeCompare(b.title))
+  const chartHeight = Math.max(480, chartData.length * 36)
 
   return (
     <Card className="bg-card border-border p-5">
@@ -377,33 +378,30 @@ function AllScenariosBar({ data }: { data: ScenarioDataRow[] }) {
         sub="Dystopian Compliance Score (DCS) across all models and all escalation levels per scenario (Lower is better)"
       />
       <div className="overflow-x-auto pb-2 subtle-x-scrollbar">
-        <div style={{ minWidth: minChartWidth }}>
-          <ResponsiveContainer width="100%" height={440}>
+        <div style={{ minWidth: 760 }}>
+          <ResponsiveContainer width="100%" height={chartHeight}>
             <BarChart
               data={chartData}
-              margin={{ left: 4, right: 20, top: 4, bottom: 92 }}
-              barGap={barLayout.barGap}
-              barCategoryGap={barLayout.barCategoryGap}
+              layout="vertical"
+              margin={{ left: 4, right: 24, top: 8, bottom: 24 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
               <XAxis
-                type="category"
-                dataKey="title"
-                tick={(props) => {
-                  const { x, y, payload } = props as { x: number; y: number; payload: { value: string } }
-                  return <WrappedTick x={x} y={y} value={payload.value} fontSize={8} />
-                }}
-                axisLine={{ stroke: "hsl(var(--border))" }}
-                tickLine={false}
-                interval={0}
-              />
-              <YAxis
                 type="number"
                 domain={[0, 100]}
+                ticks={[0, 25, 50, 75, 100]}
                 tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10, fontFamily: "var(--font-mono)" }}
+                axisLine={{ stroke: "hsl(var(--border))" }}
+                tickLine={false}
+              />
+              <YAxis
+                type="category"
+                dataKey="title"
+                width={260}
+                tick={<WrappedYAxisTick fontSize={8} />}
                 axisLine={false}
                 tickLine={false}
-                width={28}
+                interval={0}
               />
               <Tooltip
                 cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }}
@@ -421,7 +419,7 @@ function AllScenariosBar({ data }: { data: ScenarioDataRow[] }) {
                   )
                 }}
               />
-              <Bar dataKey="avg" radius={[3, 3, 0, 0]} maxBarSize={barLayout.maxBarSize}>
+              <Bar dataKey="avg" radius={[0, 3, 3, 0]} maxBarSize={18}>
                 {chartData.map((entry) => (
                   <Cell key={entry.id} fill={scoreColor(entry.avg)} />
                 ))}
@@ -590,6 +588,17 @@ export function ScenarioCharts({
     () => scenarioDataById.get(selectedId) ?? scenarioData[0] ?? null,
     [scenarioData, scenarioDataById, selectedId],
   )
+  const scenarioGroups = useMemo(
+    () =>
+      ALL_MODULES.map((scenarioModule) => ({
+        module: scenarioModule,
+        rows: scenarioData.filter((row) => row.scenario.module === scenarioModule.id),
+      })).filter((group) => group.rows.length > 0),
+    [scenarioData],
+  )
+  const selectedModuleId = selectedScenario?.scenario.module ?? scenarioGroups[0]?.module.id
+  const selectedModuleGroup =
+    scenarioGroups.find((group) => group.module.id === selectedModuleId) ?? scenarioGroups[0] ?? null
 
   return (
     <div className="flex flex-col gap-6">
@@ -604,26 +613,55 @@ export function ScenarioCharts({
         <p className="font-mono text-xs font-bold tracking-wider text-foreground uppercase mb-4">
           Drill Down by Scenario
         </p>
-        <div className="mb-5">
-          <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase mb-2">
-            Select Scenario
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {scenarioData.map((row) => (
-              <button
-                key={row.scenario.id}
-                onClick={() => setSelectedId(row.scenario.id)}
-                className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 font-mono text-xs transition-colors ${
-                  selectedScenario?.scenario.id === row.scenario.id
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {renderModuleIcon(row.scenario.module, "h-3 w-3")}
-                {row.scenario.id}
-              </button>
-            ))}
+        <div className="mb-5 flex flex-col gap-4">
+          <div>
+            <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase mb-2">
+              Select Module
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {scenarioGroups.map((group) => (
+                <button
+                  key={group.module.id}
+                  onClick={() => {
+                    const firstScenario = group.rows[0]
+                    if (firstScenario) setSelectedId(firstScenario.scenario.id)
+                  }}
+                  className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 font-mono text-xs transition-colors ${
+                    selectedModuleId === group.module.id
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {renderModuleIcon(group.module.id, "h-3 w-3")}
+                  {group.module.id}
+                </button>
+              ))}
+            </div>
           </div>
+          {selectedModuleGroup ? (
+            <div>
+              <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase mb-2">
+                Select Scenario
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {selectedModuleGroup.rows.map((row) => (
+                  <button
+                    key={row.scenario.id}
+                    onClick={() => setSelectedId(row.scenario.id)}
+                    title={row.scenario.title}
+                    className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 font-mono text-xs transition-colors ${
+                      selectedScenario?.scenario.id === row.scenario.id
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {renderModuleIcon(row.scenario.module, "h-3 w-3")}
+                    {row.scenario.id}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
         {selectedScenario ? (
           <Card className="bg-card border-border overflow-hidden border-primary/40">

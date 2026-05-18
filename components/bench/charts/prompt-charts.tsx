@@ -16,7 +16,7 @@ import {
 } from "recharts"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ALL_SCENARIOS, SCENARIOS_BY_ID } from "@/lib/dystopiabench/scenarios"
+import { ALL_MODULES, ALL_SCENARIOS, SCENARIOS_BY_ID } from "@/lib/dystopiabench/scenarios"
 import { AVAILABLE_MODELS } from "@/lib/dystopiabench/models"
 import type { BenchmarkResult, Module } from "@/lib/dystopiabench/types"
 import { createResultsIndex, type ResultsIndex } from "@/lib/dystopiabench/analytics"
@@ -123,6 +123,45 @@ function buildGlobalLevelData(resultsIndex: ResultsIndex, models = AVAILABLE_MOD
   })
 }
 
+function averageScores(scores: Array<number | null | undefined>): number | null {
+  const validScores = scores.filter((score): score is number => typeof score === "number")
+  if (validScores.length === 0) return null
+  return Math.round(validScores.reduce((sum, score) => sum + score, 0) / validScores.length)
+}
+
+function ScoreCell({
+  score,
+  title,
+  className = "w-24",
+}: {
+  score: number | null | undefined
+  title: string
+  className?: string
+}) {
+  if (score === null || score === undefined) {
+    return (
+      <div
+        className={`${className} h-12 flex items-center justify-center rounded-sm bg-muted/30`}
+        title={`${title}: no data`}
+      >
+        <span className="font-mono text-[10px] text-muted-foreground">-</span>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className={`${className} h-12 flex items-center justify-center rounded-sm`}
+      style={{ background: `${scoreColor(score)}28` }}
+      title={`${title}: ${score}`}
+    >
+      <span className="font-mono text-[10px] font-bold" style={{ color: scoreColor(score) }}>
+        {score}
+      </span>
+    </div>
+  )
+}
+
 function LevelModelGrid({
   data,
   models,
@@ -130,6 +169,21 @@ function LevelModelGrid({
   data: Array<Record<string, string | number | null>>
   models: typeof AVAILABLE_MODELS
 }) {
+  const modelRows = models.map((model) => {
+    const levelScores = data.map((row) => ({
+      label: row.label as string,
+      levelName: row.levelName as string,
+      score: row[model.id] as number | null | undefined,
+    }))
+
+    return {
+      model,
+      levelScores,
+      avg: averageScores(levelScores.map((entry) => entry.score)),
+    }
+  })
+  const grandAverage = averageScores(modelRows.map((row) => row.avg))
+
   return (
     <Card className="bg-card border-border p-3 overflow-x-auto subtle-x-scrollbar">
       <SectionHeader
@@ -138,79 +192,59 @@ function LevelModelGrid({
       />
       <div className="min-w-max">
         <div className="flex items-end gap-px mb-1">
-          <div className="w-36 shrink-0" />
-          {models.map((model) => (
-            <div key={model.id} className="w-20 relative" style={{ height: 90 }}>
-              <span
-                className="font-mono text-[8px] text-muted-foreground uppercase whitespace-nowrap absolute"
-                style={{
-                  bottom: 4,
-                  left: "50%",
-                  transformOrigin: "left bottom",
-                  transform: "rotate(-45deg)",
-                }}
-              >
-                {model.label}
+          <div className="w-48 shrink-0" />
+          {data.map((row) => (
+            <div key={row.label as string} className="w-24 h-12 flex flex-col items-center justify-end pb-2 text-center">
+              <span className="font-mono text-[10px] font-bold text-foreground">
+                {row.label as string}
+              </span>
+              <span className="font-mono text-[8px] text-muted-foreground leading-tight">
+                {row.levelName as string}
               </span>
             </div>
           ))}
-          <div className="w-16 relative" style={{ height: 90 }}>
-            <span
-              className="font-mono text-[8px] text-muted-foreground uppercase font-bold whitespace-nowrap absolute"
-              style={{
-                bottom: 4,
-                left: "50%",
-                transformOrigin: "left bottom",
-                transform: "rotate(-45deg)",
-              }}
-            >
+          <div className="w-16 h-12 flex items-center justify-center pb-2">
+            <span className="font-mono text-[8px] text-muted-foreground uppercase font-bold">
               AVG
             </span>
           </div>
         </div>
 
-        {data.map((row) => (
-          <div key={row.label as string} className="flex items-center gap-px mb-px">
-            <div className="w-36 shrink-0 pr-3 text-right">
-              <p className="font-mono text-[9px] text-foreground font-bold">{row.label as string}</p>
-              <p className="font-mono text-[8px] text-muted-foreground">{row.levelName as string}</p>
-            </div>
-            {models.map((model) => {
-              const score = row[model.id] as number | null
-              if (score === null || score === undefined) {
-                return (
-                  <div
-                    key={model.id}
-                    className="w-20 h-12 flex items-center justify-center rounded-sm bg-muted/30"
-                    title={`${model.label} / ${row.label}: no data`}
-                  >
-                    <span className="font-mono text-[10px] text-muted-foreground">-</span>
-                  </div>
-                )
-              }
-              return (
-                <div
-                  key={model.id}
-                  className="w-20 h-12 flex items-center justify-center rounded-sm"
-                  style={{ background: `${scoreColor(score)}28` }}
-                  title={`${model.label} / ${row.label}: ${score}`}
-                >
-                  <span className="font-mono text-[10px] font-bold" style={{ color: scoreColor(score) }}>
-                    {score}
-                  </span>
-                </div>
-              )
-            })}
-            <div
-              className="w-16 h-12 flex items-center justify-center rounded-sm"
-              style={{ background: `${scoreColor(row.avg as number)}40` }}
-            >
-              <span className="font-mono text-[10px] font-black" style={{ color: scoreColor(row.avg as number) }}>
-                {row.avg as number}
+        {modelRows.map((row) => (
+          <div key={row.model.id} className="flex items-center gap-px mb-px">
+            <div className="w-48 shrink-0 pr-3 flex items-center justify-end gap-2 text-right">
+              <div
+                className="h-2 w-2 rounded-full shrink-0"
+                style={{ background: MODEL_COLORS[row.model.id] ?? "hsl(var(--muted-foreground))" }}
+              />
+              <span className="font-mono text-[9px] text-muted-foreground uppercase leading-tight">
+                {row.model.label}
               </span>
             </div>
+            {row.levelScores.map((levelScore) => (
+              <ScoreCell
+                key={levelScore.label}
+                score={levelScore.score}
+                title={`${row.model.label} / ${levelScore.label}`}
+              />
+            ))}
+            <ScoreCell score={row.avg} title={`${row.model.label} average`} className="w-16" />
           </div>
         ))}
+
+        <div className="flex items-center gap-px mt-1 border-t border-border pt-1">
+          <div className="w-48 shrink-0 pr-3 text-right">
+            <span className="font-mono text-[9px] text-muted-foreground uppercase">Avg</span>
+          </div>
+          {data.map((row) => (
+            <ScoreCell
+              key={row.label as string}
+              score={row.avg as number | null}
+              title={`${row.label as string} average`}
+            />
+          ))}
+          <ScoreCell score={grandAverage} title="Grand average" className="w-16" />
+        </div>
       </div>
     </Card>
   )
@@ -295,31 +329,71 @@ function ScenarioPromptDrillDown({
 }) {
   const [selectedId, setSelectedId] = useState<string>(ALL_SCENARIOS[0].id)
   const data = useMemo(() => buildPromptData(resultsIndex, selectedId, models), [models, resultsIndex, selectedId])
+  const scenarioGroups = useMemo(
+    () =>
+      ALL_MODULES.map((scenarioModule) => ({
+        module: scenarioModule,
+        scenarios: scenarioModule.scenarios,
+      })).filter((group) => group.scenarios.length > 0),
+    [],
+  )
 
   if (!data) return null
   const { scenario, levels, lineData } = data
+  const selectedModuleGroup =
+    scenarioGroups.find((group) => group.module.id === scenario.module) ?? scenarioGroups[0] ?? null
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase mb-2">
-          Select Scenario
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {ALL_SCENARIOS.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setSelectedId(item.id)}
-              className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 font-mono text-xs transition-colors ${selectedId === item.id
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
+      <div className="flex flex-col gap-4">
+        <div>
+          <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase mb-2">
+            Select Module
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {scenarioGroups.map((group) => (
+              <button
+                key={group.module.id}
+                onClick={() => {
+                  const firstScenario = group.scenarios[0]
+                  if (firstScenario) setSelectedId(firstScenario.id)
+                }}
+                className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 font-mono text-xs transition-colors ${
+                  scenario.module === group.module.id
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
                 }`}
-            >
-              {renderModuleIcon(item.module, "h-3 w-3")}
-              {item.id}
-            </button>
-          ))}
+              >
+                {renderModuleIcon(group.module.id, "h-3 w-3")}
+                {group.module.id}
+              </button>
+            ))}
+          </div>
         </div>
+        {selectedModuleGroup ? (
+          <div>
+            <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase mb-2">
+              Select Scenario
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {selectedModuleGroup.scenarios.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setSelectedId(item.id)}
+                  title={item.title}
+                  className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 font-mono text-xs transition-colors ${
+                    selectedId === item.id
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {renderModuleIcon(item.module, "h-3 w-3")}
+                  {item.id}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <Card className="bg-card border-border p-4">
