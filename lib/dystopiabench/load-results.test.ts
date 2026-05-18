@@ -37,7 +37,7 @@ function makeActiveDashboardManifest(): RunManifestV2 {
   })
 }
 
-test("loadSavedRun prefers latest full stateful manifests over compact chart payloads", async () => {
+test("loadSavedRun prefers compact latest stateful chart payloads over full manifests", async () => {
   const originalFetch = globalThis.fetch
   const manifest = makeActiveDashboardManifest()
   const payload = createDashboardChartPayload(manifest, toChartResults(manifest))
@@ -57,22 +57,23 @@ test("loadSavedRun prefers latest full stateful manifests over compact chart pay
 
   try {
     const loaded = await loadSavedRun(undefined, {
+      latestVersion: "chart-first-test",
       latestMode: "stateful",
       expectedMode: "stateful",
     })
 
     assert.ok(loaded)
-    assert.equal(loaded.manifest?.runId, manifest.runId)
-    assert.equal(loaded.chartPayload, undefined)
+    assert.equal(loaded.manifest, null)
+    assert.equal(loaded.chartPayload?.runId, manifest.runId)
     assert.equal(loaded.results.length, 1)
-    assert.equal(requested[0], "/data/benchmark-results-stateful.json")
+    assert.equal(requested[0], "/data/benchmark-results-stateful.chart.json?v=chart-first-test")
     assert.equal(requested.length, 1)
   } finally {
     globalThis.fetch = originalFetch
   }
 })
 
-test("loadSavedRun falls back through compressed manifests before compact payloads", async () => {
+test("loadSavedRun falls back through full stateful manifests when compact payloads are missing", async () => {
   const originalFetch = globalThis.fetch
   const manifest = makeActiveDashboardManifest()
   const requested: string[] = []
@@ -80,7 +81,7 @@ test("loadSavedRun falls back through compressed manifests before compact payloa
   globalThis.fetch = async (input) => {
     const url = String(input)
     requested.push(url)
-    if (url === "/data/benchmark-results-stateful.json.gz") {
+    if (url.startsWith("/data/benchmark-results-stateful.json.gz")) {
       return jsonResponse(manifest)
     }
     return jsonResponse({}, 404)
@@ -88,6 +89,7 @@ test("loadSavedRun falls back through compressed manifests before compact payloa
 
   try {
     const loaded = await loadSavedRun(undefined, {
+      latestVersion: "fallback-test",
       latestMode: "stateful",
       expectedMode: "stateful",
     })
@@ -95,9 +97,10 @@ test("loadSavedRun falls back through compressed manifests before compact payloa
     assert.ok(loaded)
     assert.equal(loaded.manifest?.runId, manifest.runId)
     assert.equal(loaded.results.length, 1)
-    assert.deepEqual(requested.slice(0, 2), [
-      "/data/benchmark-results-stateful.json",
-      "/data/benchmark-results-stateful.json.gz",
+    assert.deepEqual(requested.slice(0, 3), [
+      "/data/benchmark-results-stateful.chart.json?v=fallback-test",
+      "/data/benchmark-results-stateful.json?v=fallback-test",
+      "/data/benchmark-results-stateful.json.gz?v=fallback-test",
     ])
   } finally {
     globalThis.fetch = originalFetch

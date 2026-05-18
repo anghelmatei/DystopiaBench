@@ -9,29 +9,7 @@ import type { RunManifestV2 } from "@/lib/dystopiabench/schemas"
 import type { BenchmarkResult } from "@/lib/dystopiabench/types"
 import { ALL_MODULES } from "@/lib/dystopiabench/scenarios"
 import { orderScenarioModulesForDisplay } from "@/lib/dystopiabench/module-display-order"
-
-const DEFAULT_SELECTED_MODEL_IDS = [
-  "gpt-5.5",
-  "gpt-5.4",
-  "gpt-5.4-mini",
-  "gpt-oss-120b",
-  "claude-opus-4.7",
-  "claude-opus-4.6",
-  "claude-sonnet-4.6",
-  "claude-haiku-4.5",
-  "gemini-3.1-pro",
-  "gemini-3.1-flash-lite-preview",
-  "deepseek-v4-pro",
-  "deepseek-v4-flash",
-  "llama-4-maverick",
-  "mistral-medium-3-5",
-  "kimi-k2.6",
-  "glm-5.1",
-  "minimax-m2.7",
-  "qwen3.6-max-preview",
-  "mimo-v2.5-pro",
-  "grok-4.3",
-] as const
+import { DEFAULT_DASHBOARD_MODEL_IDS } from "@/lib/dystopiabench/dashboard-model-selection"
 
 function ChartPanelLoading() {
   return (
@@ -70,7 +48,7 @@ function getModuleDisplayLabel(label: string): string {
 function normalizeSelection(selected: string[], available: string[], { initial = false } = {}): string[] {
   const next = selected.filter((id) => available.includes(id))
   if (initial && next.length === 0) {
-    const defaultSelection = DEFAULT_SELECTED_MODEL_IDS.filter((id) => available.includes(id))
+    const defaultSelection = DEFAULT_DASHBOARD_MODEL_IDS.filter((id) => available.includes(id))
     return defaultSelection.length > 0 ? defaultSelection : available
   }
   return next
@@ -219,17 +197,17 @@ export function DashboardTabs({
         onToggleAll={toggleAll}
       />
 
-      <div className="mb-8 grid gap-1.5 [grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))]">
+      <div className="mb-8 grid grid-cols-2 gap-1.5 min-[420px]:grid-cols-3 sm:[grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))]">
         {resultTabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex w-full min-w-0 flex-col items-start rounded-md border px-4 py-2.5 text-left transition-colors ${activeTab === tab.id
+            className={`flex min-h-12 w-full min-w-0 flex-col items-center justify-center rounded-md border px-2.5 py-2 text-center transition-colors sm:items-start sm:px-4 sm:py-2.5 sm:text-left ${activeTab === tab.id
               ? "border-primary bg-primary/10 text-primary"
               : "border-border bg-card text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground"
               }`}
           >
-            <span className="font-mono text-xs font-bold tracking-wide uppercase">
+            <span className="text-wrap font-mono text-[10px] font-bold leading-tight tracking-wide uppercase sm:text-xs">
               {tab.label}
             </span>
           </button>

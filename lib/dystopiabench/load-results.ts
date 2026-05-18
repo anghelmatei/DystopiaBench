@@ -5,6 +5,7 @@ import { toModuleId } from "./types"
 import { filterChartableManifestResults } from "./chart-results"
 import { isDashboardDisplayCompatibleMetadata } from "./display-compat"
 import { aggregateResultsByTuple } from "./repeat-aggregation"
+import { getDashboardModelSelectionVersion } from "./dashboard-model-selection"
 import {
   dashboardChartPayloadSchema,
   runIndexV2Schema,
@@ -131,7 +132,8 @@ function parseLegacyRun(raw: unknown): LoadedRunData | null {
 
 export async function loadRuns(): Promise<RunIndexItem[]> {
   try {
-    const res = await fetch("/data/runs.json", { cache: "force-cache" })
+    const modelSelectionVersion = getDashboardModelSelectionVersion()
+    const res = await fetch(`/data/runs.json?v=${encodeURIComponent(modelSelectionVersion)}`, { cache: "no-cache" })
     if (!res.ok) return []
     const parsed = runIndexV2Schema.safeParse(await res.json())
     return parsed.success ? parsed.data : []
@@ -145,6 +147,8 @@ export interface LoadSavedRunOptions {
   latestMode?: RunConversationMode
   expectedMode?: RunConversationMode
 }
+
+const savedRunCache = new Map<string, Promise<LoadedRunData | null>>()
 
 async function readJsonResponse(res: Response): Promise<unknown> {
   if (!res.url.endsWith(".gz")) {
@@ -160,7 +164,16 @@ async function readJsonResponse(res: Response): Promise<unknown> {
   return JSON.parse(await new Response(decompressed).text()) as unknown
 }
 
-export async function loadSavedRun(
+function getSavedRunCacheKey(runId?: string, options?: LoadSavedRunOptions): string {
+  return JSON.stringify({
+    runId: runId ?? "latest",
+    latestVersion: options?.latestVersion ?? "",
+    latestMode: options?.latestMode ?? "",
+    expectedMode: options?.expectedMode ?? "",
+  })
+}
+
+async function loadSavedRunUncached(
   runId?: string,
   options?: LoadSavedRunOptions,
 ): Promise<LoadedRunData | null> {
@@ -178,13 +191,13 @@ export async function loadSavedRun(
           decorateVersion("/data/benchmark-results-stateless.json"),
         ]
         : latestMode === "stateful"
-          ? [
-            decorateVersion("/data/benchmark-results-stateful.json"),
-            decorateVersion("/data/benchmark-results-stateful.json.gz"),
-            decorateVersion("/data/benchmark-results-stateful.chart.json"),
-            decorateVersion("/data/benchmark-results.json.gz"),
-            decorateVersion("/data/benchmark-results.json"),
-          ]
+        ? [
+          decorateVersion("/data/benchmark-results-stateful.chart.json"),
+          decorateVersion("/data/benchmark-results-stateful.json"),
+          decorateVersion("/data/benchmark-results-stateful.json.gz"),
+          decorateVersion("/data/benchmark-results.json.gz"),
+          decorateVersion("/data/benchmark-results.json"),
+        ]
           : [decorateVersion("/data/benchmark-results.json.gz"), decorateVersion("/data/benchmark-results.json")]
 
     for (const url of urlCandidates) {
@@ -243,6 +256,24 @@ export async function loadSavedRun(
   } catch {
     return null
   }
+}
+
+export async function loadSavedRun(
+  runId?: string,
+  options?: LoadSavedRunOptions,
+): Promise<LoadedRunData | null> {
+  const cacheKey = getSavedRunCacheKey(runId, options)
+  const cached = savedRunCache.get(cacheKey)
+  if (cached) return cached
+
+  const pending = loadSavedRunUncached(runId, options).then((loaded) => {
+    if (!loaded) {
+      savedRunCache.delete(cacheKey)
+    }
+    return loaded
+  })
+  savedRunCache.set(cacheKey, pending)
+  return pending
 }
 
 export async function loadSavedResults(runId?: string): Promise<BenchmarkResult[] | null> {

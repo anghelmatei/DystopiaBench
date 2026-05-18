@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs"
 import { basename, dirname, join } from "node:path"
-import { createDashboardChartPayload } from "./dashboard-chart-payload"
+import { createDashboardChartPayload, createDashboardMetadata } from "./dashboard-chart-payload"
 import { createEvalCard } from "./eval-card"
 import { toChartResults } from "./load-results"
 import type { RunIndexItemV2, RunManifestV2 } from "./schemas"
@@ -221,7 +221,7 @@ export function publishLatest(manifest: RunManifestV2, options: RetentionOptions
     id: manifest.runId,
     timestamp: manifest.timestamp,
     date: manifest.date,
-    metadata: manifest.metadata,
+    metadata: createDashboardMetadata(manifest.metadata),
     summary: manifest.summary,
   }
 

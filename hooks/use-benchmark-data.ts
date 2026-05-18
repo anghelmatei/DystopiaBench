@@ -8,6 +8,10 @@ import {
   type RunIndexItem,
 } from "@/lib/dystopiabench/load-results"
 import { isDashboardDisplayCompatibleMetadata } from "@/lib/dystopiabench/display-compat"
+import {
+  createDashboardVersionHash,
+  getDashboardModelSelectionVersion,
+} from "@/lib/dystopiabench/dashboard-model-selection"
 import type { RunManifestV2 } from "@/lib/dystopiabench/schemas"
 import type { BenchmarkResult } from "@/lib/dystopiabench/types"
 
@@ -22,7 +26,7 @@ interface ResolvedRun {
 
 function getRunIndexVersion(run: RunIndexItem | undefined): string | undefined {
   if (!run) return undefined
-  return [
+  return createDashboardVersionHash([
     run.id,
     run.timestamp,
     run.metadata.models.join(","),
@@ -31,7 +35,13 @@ function getRunIndexVersion(run: RunIndexItem | undefined): string | undefined {
     run.summary.statusCounts.ok ?? 0,
     run.summary.statusCounts.model_error ?? 0,
     run.summary.statusCounts.judge_error ?? 0,
-  ].join(":")
+  ].join(":"))
+}
+
+function getDashboardCacheVersion(run: RunIndexItem | undefined): string | undefined {
+  const runVersion = getRunIndexVersion(run)
+  if (!runVersion) return undefined
+  return `${runVersion}:models:${getDashboardModelSelectionVersion()}`
 }
 
 export interface BenchmarkDataState {
@@ -181,7 +191,7 @@ export function useBenchmarkData(): BenchmarkDataState {
 
       setSelectedStatefulRunIdState(runId)
       const selectedRunVersion =
-        runId === "latest" ? undefined : getRunIndexVersion(statefulRunById.get(runId))
+        runId === "latest" ? undefined : getDashboardCacheVersion(statefulRunById.get(runId))
       const resolved = await resolveStatefulRun(runId, latestStatefulRunId, selectedRunVersion)
       setStatefulResults(resolved.results)
       setStatefulManifest(resolved.manifest)
@@ -205,12 +215,12 @@ export function useBenchmarkData(): BenchmarkDataState {
 
       const latestStatefulRunId = filteredStatefulRuns[0]?.id
       const filteredStatefulRunById = new Map(filteredStatefulRuns.map((run) => [run.id, run]))
-      statefulLatestVersionRef.current = getRunIndexVersion(filteredStatefulRuns[0])
-      statelessLatestVersionRef.current = getRunIndexVersion(filteredStatelessRuns[0])
+      statefulLatestVersionRef.current = getDashboardCacheVersion(filteredStatefulRuns[0])
+      statelessLatestVersionRef.current = getDashboardCacheVersion(filteredStatelessRuns[0])
       const selectedRunVersion =
         selectedStatefulRunIdRef.current === "latest"
           ? undefined
-          : getRunIndexVersion(filteredStatefulRunById.get(selectedStatefulRunIdRef.current))
+          : getDashboardCacheVersion(filteredStatefulRunById.get(selectedStatefulRunIdRef.current))
       const resolvedStateful = await resolveStatefulRun(
         selectedStatefulRunIdRef.current,
         latestStatefulRunId,
