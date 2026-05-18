@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { createDashboardChartPayload } from "./dashboard-chart-payload"
-import { loadSavedRun, toChartResults } from "./load-results"
+import { loadRuns, loadSavedRun, toChartResults } from "./load-results"
 import { makeRunManifest } from "./test-fixtures"
 import type { RunManifestV2 } from "./schemas"
 
@@ -99,6 +99,58 @@ test("loadSavedRun falls back through compressed manifests before compact payloa
       "/data/benchmark-results-stateful.json",
       "/data/benchmark-results-stateful.json.gz",
     ])
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test("loadRuns returns an empty list on fetch failures and schema mismatches", async () => {
+  const originalFetch = globalThis.fetch
+
+  try {
+    globalThis.fetch = async () => {
+      throw new Error("network down")
+    }
+    assert.deepEqual(await loadRuns(), [])
+
+    globalThis.fetch = async () => jsonResponse({ invalid: true })
+    assert.deepEqual(await loadRuns(), [])
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test("loadSavedRun returns null when all run-specific candidates are missing", async () => {
+  const originalFetch = globalThis.fetch
+  const requested: string[] = []
+
+  globalThis.fetch = async (input) => {
+    requested.push(String(input))
+    return jsonResponse({}, 404)
+  }
+
+  try {
+    assert.equal(await loadSavedRun("missing-run"), null)
+    assert.deepEqual(requested, [
+      "/data/benchmark-missing-run.json.gz",
+      "/data/benchmark-missing-run.json",
+    ])
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test("loadSavedRun returns null for malformed JSON responses", async () => {
+  const originalFetch = globalThis.fetch
+
+  globalThis.fetch = async () =>
+    new Response("{", {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })
+
+  try {
+    assert.equal(await loadSavedRun("malformed-run"), null)
   } finally {
     globalThis.fetch = originalFetch
   }

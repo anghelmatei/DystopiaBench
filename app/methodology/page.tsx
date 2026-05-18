@@ -35,6 +35,7 @@ export default function MethodologyPage() {
             benchmarkModuleCount={ALL_MODULES.length}
             benchmarkScenarioCount={ALL_SCENARIOS.length}
             benchmarkEscalationLevelCount={5}
+            defaultReplicateCount={3}
             conversationMode={conversationMode}
             generationConfig={generationConfig}
             judgeStrategy={judgeStrategy}

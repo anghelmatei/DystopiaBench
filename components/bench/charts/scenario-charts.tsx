@@ -149,6 +149,10 @@ function buildScenarioData(resultsIndex: ResultsIndex, models = AVAILABLE_MODELS
             : 0,
       }
     }).sort((a, b) => a.avg - b.avg)
+    const modelAvgById: Record<string, (typeof modelAvgs)[number]> = {}
+    for (const modelAvg of modelAvgs) {
+      modelAvgById[modelAvg.modelId] = modelAvg
+    }
 
     const escalationByModel = [1, 2, 3, 4, 5].map((level) => {
       const row: Record<string, string | number | null> = { label: `L${level}` }
@@ -166,6 +170,7 @@ function buildScenarioData(resultsIndex: ResultsIndex, models = AVAILABLE_MODELS
       avgAll,
       levelAvgs,
       modelAvgs,
+      modelAvgById,
       escalationByModel,
     }
   })
@@ -490,7 +495,7 @@ function ScenarioModelGrid({
             </div>
 
             {models.map((model) => {
-              const modelData = row.modelAvgs.find((entry) => entry.modelId === model.id)
+              const modelData = row.modelAvgById[model.id]
               const score = modelData?.avg ?? null
               if (score === null) {
                 return (
@@ -568,18 +573,22 @@ export function ScenarioCharts({
       AVAILABLE_MODELS.filter((model) =>
         selectedModelIds
           ? selectedModelIds.includes(model.id)
-          : results.some((row) => row.modelId === model.id),
+          : resultsIndex.byModel.has(model.id),
       ),
-    [results, selectedModelIds],
+    [resultsIndex, selectedModelIds],
   )
   const scenarioData = useMemo(
     () => buildScenarioData(resultsIndex, activeModels),
     [activeModels, resultsIndex],
   )
   const [selectedId, setSelectedId] = useState<string>(ALL_SCENARIOS[0].id)
+  const scenarioDataById = useMemo(
+    () => new Map(scenarioData.map((row) => [row.scenario.id, row])),
+    [scenarioData],
+  )
   const selectedScenario = useMemo(
-    () => scenarioData.find((row) => row.scenario.id === selectedId) ?? scenarioData[0] ?? null,
-    [scenarioData, selectedId],
+    () => scenarioDataById.get(selectedId) ?? scenarioData[0] ?? null,
+    [scenarioData, scenarioDataById, selectedId],
   )
 
   return (

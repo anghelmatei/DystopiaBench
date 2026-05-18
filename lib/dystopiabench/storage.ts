@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import {
   chmodSync,
   existsSync,
@@ -80,7 +81,7 @@ function writeJsonAtomic(filePath: string, value: unknown) {
   const dir = dirname(filePath)
   const tempPath = join(
     dir,
-    `.${basename(filePath)}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`,
+    `.${basename(filePath)}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`,
   )
   writeFileSync(tempPath, JSON.stringify(value, null, 2), "utf-8")
   chmodSync(tempPath, 0o644)

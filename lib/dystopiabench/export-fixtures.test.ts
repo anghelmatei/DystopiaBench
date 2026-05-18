@@ -28,6 +28,99 @@ test("export helpers generate fixture-backed JSONL and CSV outputs", () => {
   assert.match(runMetadataToCsv(manifest), /artifactPolicy/)
 })
 
+test("buildScenarioSummaries calculates exact aggregates and separates locales", () => {
+  const manifest = makeRunManifest()
+  const base = manifest.results[0]
+  const summaries = buildScenarioSummaries([
+    {
+      ...base,
+      level: 1,
+      score: 0,
+      compliance: "refusal",
+      status: "ok",
+      timestamp: 1,
+    },
+    {
+      ...base,
+      level: 2,
+      score: 66,
+      compliance: "compliant",
+      status: "ok",
+      timestamp: 2,
+    },
+    {
+      ...base,
+      level: 3,
+      score: null,
+      compliance: undefined,
+      status: "invalid_response",
+      scorable: false,
+      errorCode: "EMPTY_GENERATED_COMPLETION",
+      scoreabilityReason: "EMPTY_GENERATED_COMPLETION",
+      timestamp: 3,
+    },
+    {
+      ...base,
+      level: 1,
+      promptLocale: "ro",
+      sourceLocale: "en",
+      score: 100,
+      compliance: "proactive",
+      status: "ok",
+      timestamp: 4,
+    },
+  ])
+
+  const defaultLocale = summaries.find((row) => row.promptLocale === undefined)
+  const romanian = summaries.find((row) => row.promptLocale === "ro")
+
+  assert.ok(defaultLocale)
+  assert.deepEqual({
+    scoredPrompts: defaultLocale.scoredPrompts,
+    averageDcs: defaultLocale.averageDcs,
+    variance: defaultLocale.variance,
+    minScore: defaultLocale.minScore,
+    maxScore: defaultLocale.maxScore,
+    refusalRate: defaultLocale.refusalRate,
+    l1L2AverageDcs: defaultLocale.l1L2AverageDcs,
+    l3L5AverageDcs: defaultLocale.l3L5AverageDcs,
+    okRate: defaultLocale.okRate,
+  }, {
+    scoredPrompts: 2,
+    averageDcs: 33,
+    variance: 1089,
+    minScore: 0,
+    maxScore: 66,
+    refusalRate: 50,
+    l1L2AverageDcs: 33,
+    l3L5AverageDcs: null,
+    okRate: 66.67,
+  })
+  assert.ok(romanian)
+  assert.equal(romanian.averageDcs, 100)
+  assert.equal(romanian.promptLocale, "ro")
+  assert.equal(romanian.sourceLocale, "en")
+})
+
+test("manifestToJsonl emits one exact JSON object per result without trailing newline", () => {
+  const manifest = makeRunManifest({
+    results: [
+      makeRunManifest().results[0],
+      {
+        ...makeRunManifest().results[0],
+        scenarioId: "fixture-002",
+        sampleId: "sample-fixture-002",
+        timestamp: 2,
+      },
+    ],
+  })
+
+  assert.equal(
+    manifestToJsonl(manifest),
+    `${JSON.stringify(manifest.results[0])}\n${JSON.stringify(manifest.results[1])}`,
+  )
+})
+
 test("parquet exports write fixture files to disk", async () => {
   const manifest = makeRunManifest()
   const summaries = buildScenarioSummaries(manifest.results)

@@ -21,6 +21,7 @@ type MethodologySectionProps = {
   benchmarkModuleCount: number
   benchmarkScenarioCount: number
   benchmarkEscalationLevelCount: number
+  defaultReplicateCount: number
   conversationMode: string
   generationConfig: GenerationConfig
   judgeStrategy: string
@@ -33,6 +34,7 @@ export function MethodologySection({
   benchmarkModuleCount,
   benchmarkScenarioCount,
   benchmarkEscalationLevelCount,
+  defaultReplicateCount,
   conversationMode,
   generationConfig,
   judgeStrategy,
@@ -115,10 +117,12 @@ export function MethodologySection({
           <p>
             The evaluation matrix spans {benchmarkModuleCount} modules, {benchmarkScenarioCount} scenarios, and{" "}
             {benchmarkEscalationLevelCount} fixed escalation levels per scenario. The atomic unit is the
-            <span className="text-muted-foreground"> scenario x model x level</span> tuple. In baseline runs, each tuple is attempted once,
-            yielding{" "}
+            <span className="text-muted-foreground"> scenario x model x level x replicate</span> row.
+            A single-replicate pass yields{" "}
             <span className="text-muted-foreground">{benchmarkScenarioCount * benchmarkEscalationLevelCount * modelCount}</span>{" "}
-            prompts before any reruns. The registry now includes modules for military escalation, surveillance,
+            prompts; the default <span className="text-muted-foreground">{defaultReplicateCount}x</span> replicate setting yields{" "}
+            <span className="text-muted-foreground">{benchmarkScenarioCount * benchmarkEscalationLevelCount * modelCount * defaultReplicateCount}</span>{" "}
+            prompt attempts before any reruns. The registry now includes modules for military escalation, surveillance,
             civic capture, therapeutic coercion, caste-stability conditioning, and synthetic persuasion.
           </p>
         </div>
@@ -130,6 +134,7 @@ export function MethodologySection({
           <p>
             The default execution mode is <span className="text-muted-foreground">{conversationMode}</span>.
             In stateful mode, each scenario-model pair is evaluated in a single conversation with prompts ordered from L1 to L5, so later turns inherit prior context until a hard model failure resets the thread.
+            The default stateful scheduler uses replicate-aware level waves, scheduling ready L1 rows across scenarios, models, and replicates before advancing to L2.
             An optional stateless mode runs each level in isolation (no prior context) for ablation studies.
             Transport follows <span className="text-muted-foreground">{transportPolicy}</span>: the primary chat pathway is attempted first,
             with fallback to OpenRouter Chat Completions when the primary path yields a transport mismatch or timeout.
@@ -193,7 +198,7 @@ export function MethodologySection({
             6. Failure taxonomy, reruns, and reproducibility
           </h5>
           <p>
-            Each tuple receives one status tag: <span className="text-muted-foreground">ok</span>,
+            Each attempted row receives one status tag: <span className="text-muted-foreground">ok</span>,
             <span className="text-muted-foreground"> model_error</span>,
             <span className="text-muted-foreground"> judge_error</span>,
             <span className="text-muted-foreground"> aborted</span>, or
@@ -203,7 +208,7 @@ export function MethodologySection({
             <span className="text-muted-foreground"> invalid_response</span> with
             <span className="text-muted-foreground"> EMPTY_GENERATED_COMPLETION</span> so they are rerun instead of counted as refusals.
             The rerun utility <span className="text-muted-foreground">bench:rerun-failures</span> supports targeted reruns
-            (<span className="text-muted-foreground">to-max-failed</span>, <span className="text-muted-foreground">all-levels</span>, or{" "}
+            (<span className="text-muted-foreground">from-first-failed</span>, <span className="text-muted-foreground">to-max-failed</span>, <span className="text-muted-foreground">all-levels</span>, or{" "}
             <span className="text-muted-foreground">failed-only</span>) by writing a new derived manifest with provenance back to the source run instead of mutating historical artifacts.
             Every run is persisted as a versioned schema artifact with generation config, prompt-version IDs, provider-routing metadata, compact OpenRouter observability identifiers when available, and judge metadata for auditability.
           </p>

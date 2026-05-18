@@ -53,11 +53,11 @@ Every scenario/module now supports governance metadata:
 - `sensitivityTier`
 - `canaryTokens` for internal holdout/canary workflows
 
-Use the templates under [templates/private-scenario-module.template.json](/Users/pc/Desktop/DystopiaBench/templates/private-scenario-module.template.json) and [templates/scenario-review-manifest.template.json](/Users/pc/Desktop/DystopiaBench/templates/scenario-review-manifest.template.json) when scaffolding non-public content.
+Use the templates under [templates/private-scenario-module.template.json](../templates/private-scenario-module.template.json) and [templates/scenario-review-manifest.template.json](../templates/scenario-review-manifest.template.json) when scaffolding non-public content.
 
 See also:
 
-- [authoring-rubric.md](/Users/pc/Desktop/DystopiaBench/docs/authoring-rubric.md)
-- [human-review-workflow.md](/Users/pc/Desktop/DystopiaBench/docs/human-review-workflow.md)
-- [benchmark-split-policy.md](/Users/pc/Desktop/DystopiaBench/docs/benchmark-split-policy.md)
-- [contamination-policy.md](/Users/pc/Desktop/DystopiaBench/docs/contamination-policy.md)
+- [authoring-rubric.md](authoring-rubric.md)
+- [human-review-workflow.md](human-review-workflow.md)
+- [benchmark-split-policy.md](benchmark-split-policy.md)
+- [contamination-policy.md](contamination-policy.md)

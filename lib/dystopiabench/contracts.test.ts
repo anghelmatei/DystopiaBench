@@ -326,6 +326,88 @@ test("loadScenarioModulesFromSources resolves npm-prefixed scenario bundles", as
   assert.equal(modules[0].scenarios[0].provenance?.sourceType, "npm")
 })
 
+test("loadScenarioModulesFromSources resolves npm package roots while ignoring package metadata", async () => {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "dystopiabench-npm-root-source-"))
+  const packageRoot = join(fixtureRoot, "node_modules", "@lab", "scenario-pack")
+  mkdirSync(packageRoot, { recursive: true })
+  writeFileSync(
+    join(packageRoot, "package.json"),
+    JSON.stringify({ name: "@lab/scenario-pack", version: "1.0.0" }, null, 2),
+    "utf-8",
+  )
+  writeFileSync(
+    join(packageRoot, "module.json"),
+    JSON.stringify({
+      id: "procurement",
+      label: "Procurement",
+      description: "Procurement module",
+      scenarios: [
+        {
+          id: "procurement-001",
+          title: "Escalation",
+          category: "test",
+          description: "desc",
+          escalationPrompts: [
+            { level: 1, label: "L1", prompt: "a" },
+            { level: 2, label: "L2", prompt: "b" },
+            { level: 3, label: "L3", prompt: "c" },
+            { level: 4, label: "L4", prompt: "d" },
+            { level: 5, label: "L5", prompt: "e" },
+          ],
+        },
+      ],
+    }, null, 2),
+    "utf-8",
+  )
+
+  const modules = await loadScenarioModulesFromSources(
+    ["npm:@lab/scenario-pack"],
+    fixtureRoot,
+  )
+
+  assert.equal(modules.length, 1)
+  assert.equal(modules[0].id, "procurement")
+  assert.equal(modules[0].provenance?.sourceType, "npm")
+})
+
+test("loadScenarioModulesFromSources still rejects non-package invalid JSON files", async () => {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "dystopiabench-invalid-source-"))
+  writeFileSync(
+    join(fixtureRoot, "module.json"),
+    JSON.stringify({
+      id: "valid",
+      label: "Valid",
+      description: "Valid module",
+      scenarios: [
+        {
+          id: "valid-001",
+          title: "Escalation",
+          category: "test",
+          description: "desc",
+          escalationPrompts: [
+            { level: 1, label: "L1", prompt: "a" },
+            { level: 2, label: "L2", prompt: "b" },
+            { level: 3, label: "L3", prompt: "c" },
+            { level: 4, label: "L4", prompt: "d" },
+            { level: 5, label: "L5", prompt: "e" },
+          ],
+        },
+      ],
+    }, null, 2),
+    "utf-8",
+  )
+  writeFileSync(
+    join(fixtureRoot, "notes.json"),
+    JSON.stringify({ name: "not a scenario module" }, null, 2),
+    "utf-8",
+  )
+
+  await assert.rejects(
+    () => loadScenarioModulesFromSources([fixtureRoot]),
+    /Required/,
+  )
+})
+
 test("buildScenarioSummaries and exports produce lab-friendly aggregates", () => {
   const manifest = makeManifest()
   const summaries = buildScenarioSummaries(manifest.results)

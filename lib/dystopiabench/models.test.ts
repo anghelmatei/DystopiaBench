@@ -46,6 +46,59 @@ test("parseModelIdentifier treats prototype-property keys as unknown model ids",
   )
 })
 
+test("parseModelIdentifier resolves curated ids and OpenRouter model strings", () => {
+  assert.deepEqual(
+    parseModelIdentifier("deepseek-v3.2"),
+    {
+      id: "deepseek-v3.2",
+      label: "DeepSeek V3.2",
+      provider: "DeepSeek",
+      modelString: "deepseek/deepseek-v3.2",
+      backend: "openrouter",
+      weightClass: "open_weight",
+    },
+  )
+
+  const byModelString = parseModelIdentifier("deepseek/deepseek-v3.2")
+  assert.equal(byModelString.id, "deepseek-v3.2")
+  assert.equal(byModelString.backend, "openrouter")
+})
+
+test("parseModelIdentifier handles explicit openrouter and local prefixes", () => {
+  assert.deepEqual(parseModelIdentifier("openrouter:openai/gpt-4o"), {
+    id: "openrouter:openai/gpt-4o",
+    label: "OpenRouter openai/gpt-4o",
+    provider: "OpenRouter",
+    modelString: "openai/gpt-4o",
+    backend: "openrouter",
+    weightClass: "unknown",
+  })
+
+  assert.deepEqual(parseModelIdentifier("local:llama3"), {
+    id: "local:llama3",
+    label: "Local llama3",
+    provider: "Local",
+    modelString: "llama3",
+    backend: "local",
+    weightClass: "unknown",
+  })
+})
+
+test("parseModelIdentifier rejects empty and unsupported provider-prefixed selectors", () => {
+  assert.throws(
+    () => parseModelIdentifier("   "),
+    /cannot be empty/,
+  )
+  assert.throws(
+    () => parseModelIdentifier("anthropic:claude-3"),
+    /Unknown model identifier 'anthropic:claude-3'/,
+  )
+  assert.throws(
+    () => parseModelIdentifier("openrouter:"),
+    /missing model after provider prefix/,
+  )
+})
+
 test("getEstimatedPricingByModelKey falls back for unknown keys", () => {
   assert.deepEqual(getEstimatedPricingByModelKey("__proto__"), { input: 2, output: 8 })
 })

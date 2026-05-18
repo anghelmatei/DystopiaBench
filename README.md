@@ -30,11 +30,13 @@ Many safety evaluations focus on clearly malicious prompts. Real misuse often st
 - 36 scenarios total
 - 5 escalation levels per scenario
 - 4 compliance tiers
-- 41 bundled model configs in the local runner catalog
+- 42 bundled model configs in the local runner catalog
+- 3 replicates by default
 
 Default full run size:
 
-- `36 scenarios x 5 levels x 41 models = 7,380 prompts`
+- Single replicate: `36 scenarios x 5 levels x 42 models = 7,560 prompts`
+- Default run: `36 scenarios x 5 levels x 42 models x 3 replicates = 22,680 prompt attempts`
 
 ## Scoring model
 
@@ -52,7 +54,7 @@ Primary summary metrics:
 - `statusCounts`: transport/judge validity outcomes
 - `modelSuccessRate`, `judgeSuccessRate`, `scorableRate`
 
-Schemas live in `lib/dystopiabench/schemas.ts` (current writer emits `schemaVersion: 7`; loaders remain compatible with existing `schemaVersion: 2`, `schemaVersion: 3`, `schemaVersion: 4`, `schemaVersion: 5`, and `schemaVersion: 6` manifests).
+Schemas live in `lib/dystopiabench/schemas.ts` (the current runner writer emits `schemaVersion: 8`; loaders remain compatible with existing `schemaVersion: 2` through `schemaVersion: 8` manifests).
 Scenario content lives in JSON module files under `lib/dystopiabench/scenario-data/modules/` and is validated through the TypeScript registry in `lib/dystopiabench/scenario-registry.ts`.
 
 ## Lab-facing features
@@ -166,7 +168,9 @@ pnpm bench:run --judge-model=google/gemini-3-flash-preview --transport=chat-only
 pnpm bench:run --judge-models=google/gemini-3-flash-preview,claude-opus-4.6
 pnpm bench:run --judge-model=claude-opus-4.6 --judge-strategy=pair-with-tiebreak
 pnpm bench:run --provider-precision=non-quantized-only
+pnpm bench:run --chat-first-models=gpt-5.4 --no-timeout-fallback
 pnpm bench:run --scheduler=level-wave --concurrency=24 --per-model-concurrency=3 --timeout-ms=600000
+pnpm bench:run --locale=fr --source-locale=en --locale-pack=configs/locale-packs/fr.json
 pnpm bench:run-isolated --module=petrov --models=gpt-5.3-codex --levels=5
 pnpm bench:run --retain=20 --archive-dir=archive
 ```
@@ -187,6 +191,8 @@ Main `bench:run` flags:
 - `--judge-strategy=single|pair-with-tiebreak`
 - In `pair-with-tiebreak`, pass exactly three `--judge-models` values in primary, secondary, arbiter order.
 - `--transport=chat-first-fallback|chat-only`
+- `--chat-first-models=<comma-separated model IDs>` to force selected OpenRouter/local selectors through the primary chat path first
+- `--no-timeout-fallback` to disable timeout-triggered fallback when `--transport=chat-first-fallback`
 - `--conversation-mode=stateful|stateless`
 - `--scheduler=level-wave|conversation`
 - `--provider-precision=default|non-quantized-only`
@@ -200,8 +206,13 @@ Main `bench:run` flags:
 - `--archive-dir=<relative-folder-under-public/data>`
 - `--no-publish-latest` to save a timestamped run manifest without replacing the dashboard aliases
 - `--resume` with `--run-id=<existing-run-id>` to continue from the saved checkpoint after an interruption or rerun from the first failed/missing level onward for affected scenario-model pairs
+- `--resume-mode=all|prefix` to choose whether resume considers all checkpoint rows or only the successful contiguous stateful prefix
 - `--no-openrouter-archive` to skip the final OpenRouter trace archive step
 - `--replicates=<positive-int>` default `3`
+- `--locale=<target-locale>`
+- `--source-locale=<source-locale>` default `en`
+- `--locale-pack=<path-to-locale-pack-json>`
+- `--locale-preset=<preset-or-label>`
 - `--experiment-id=<id>`
 - `--project=<name>`
 - `--owner=<name-or-team>`
@@ -272,15 +283,18 @@ Examples:
 
 ```bash
 pnpm bench:rerun-failures --source=run --run-id=2026-03-01T20-26-13-370Z
+pnpm bench:rerun-failures --scope=from-first-failed
 pnpm bench:rerun-failures --scope=failed-only
 pnpm bench:rerun-failures --scope=all-levels
+pnpm bench:rerun-failures --chat-first-models=gpt-5.4 --no-timeout-fallback
 pnpm bench:rerun-failures --dry-run
 pnpm bench:rerun-failures --no-publish
 ```
 
 `--scope` behavior:
 
-- `to-max-failed` (default): rerun all levels up to highest failed level per scenario-model pair
+- `from-first-failed` (default): rerun from the first failed or missing level through the end of the affected scenario-model-replicate chain
+- `to-max-failed`: rerun all levels up to highest failed level per scenario-model pair
 - `all-levels`: rerun levels 1-5 for failed pairs
 - `failed-only`: rerun only failed tuples
 
@@ -312,6 +326,20 @@ Even with `--allow-nonpublic-publish`, the artifact must be explicitly marked `p
 pnpm check:scenarios
 pnpm check:manifests
 ```
+
+### Multilingual and maintenance workflows
+
+```bash
+pnpm bench:translate --locales=eu-24 --emit-bundles
+pnpm bench:run-multilingual --locales=eu-24 --models=gpt-5.4-mini
+pnpm bench:rescore-judges --source=run --run-id=<run-id> --no-publish
+pnpm bench:merge --base-run-id=<base-run-id> --patch-run-id=<patch-run-id> --allow-additive-models
+```
+
+- `bench:translate` creates locale packs, and can emit localized benchmark bundles.
+- `bench:run-multilingual` runs the benchmark once per requested locale pack.
+- `bench:rescore-judges` derives a new run by rescoring rows with judge failures.
+- `bench:merge` combines compatible stateful runs, including additive model runs when requested.
 
 ### Create or validate a benchmark bundle
 

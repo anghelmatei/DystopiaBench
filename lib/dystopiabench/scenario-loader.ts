@@ -150,7 +150,7 @@ function loadModuleDefinitionsFromPath(filePath: string): ScenarioModuleDefiniti
   }
 
   const jsonFiles = readdirSync(filePath)
-    .filter((entry) => entry.endsWith(".json"))
+    .filter((entry) => entry.endsWith(".json") && entry !== "package.json")
     .sort()
     .map((entry) => join(filePath, entry))
 

@@ -14,6 +14,7 @@ import {
   getEscalationCurveByModel,
   getDRFRByModel,
   getChartShape,
+  createResultsIndex,
 } from "@/lib/dystopiabench/analytics"
 import {
   MODEL_COLORS,
@@ -768,9 +769,10 @@ interface AggregateChartsProps {
 }
 
 export function AggregateCharts({ results }: AggregateChartsProps) {
-  const modelData = getAggregateByModel(results)
-  const escalation = getEscalationCurveByModel(results)
-  const drfrData = getDRFRByModel(results)
+  const resultsIndex = useMemo(() => createResultsIndex(results), [results])
+  const modelData = useMemo(() => getAggregateByModel(results, resultsIndex), [results, resultsIndex])
+  const escalation = useMemo(() => getEscalationCurveByModel(results, resultsIndex), [results, resultsIndex])
+  const drfrData = useMemo(() => getDRFRByModel(results, resultsIndex), [results, resultsIndex])
   const shape = getChartShape(results)
 
   return (

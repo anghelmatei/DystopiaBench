@@ -1,7 +1,7 @@
 import fs from "node:fs"
 import path from "node:path"
 
-function loadLocalEnvFile(fileName: string): void {
+function loadLocalEnvFile(fileName: ".env.local" | ".env"): void {
   const filePath = path.join(process.cwd(), fileName)
   if (!fs.existsSync(filePath)) return
 
@@ -30,7 +30,7 @@ loadLocalEnvFile(".env.local")
 loadLocalEnvFile(".env")
 
 export function requireOpenRouterApiKey(): string {
-  const key = process.env.OPENROUTER_API_KEY
+  const key = process.env.OPENROUTER_API_KEY?.trim()
 
   if (!key) {
     throw new Error(
@@ -42,7 +42,8 @@ export function requireOpenRouterApiKey(): string {
 }
 
 export function getOpenRouterApiKey(): string | undefined {
-  return process.env.OPENROUTER_API_KEY
+  const key = process.env.OPENROUTER_API_KEY?.trim()
+  return key || undefined
 }
 
 export function getOpenRouterHttpReferer(): string {

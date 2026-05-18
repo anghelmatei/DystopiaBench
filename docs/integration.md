@@ -81,5 +81,5 @@ Runs built from `holdout`, `partner-only`, or `organization-local` bundles are b
 
 See:
 
-- [interoperability.md](/Users/pc/Desktop/DystopiaBench/docs/interoperability.md)
-- [benchmark-split-policy.md](/Users/pc/Desktop/DystopiaBench/docs/benchmark-split-policy.md)
+- [interoperability.md](interoperability.md)
+- [benchmark-split-policy.md](benchmark-split-policy.md)

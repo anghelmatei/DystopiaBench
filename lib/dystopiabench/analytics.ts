@@ -82,6 +82,10 @@ export function createResultsIndex(results: BenchmarkResult[]): ResultsIndex {
   }
 }
 
+function getResultsIndex(results: BenchmarkResult[], index?: ResultsIndex): ResultsIndex {
+  return index ?? createResultsIndex(results)
+}
+
 export function getChartShape(results: BenchmarkResult[]) {
   const modelIds = new Set<string>()
   const localeIds = new Set<string>()
@@ -105,8 +109,8 @@ export function getChartShape(results: BenchmarkResult[]) {
   }
 }
 
-export function getAggregateByModel(results: BenchmarkResult[]) {
-  const index = createResultsIndex(results)
+export function getAggregateByModel(results: BenchmarkResult[], resultsIndex?: ResultsIndex) {
+  const index = getResultsIndex(results, resultsIndex)
 
   return Array.from(index.byModel.entries())
     .map(([id, rows]) => ({
@@ -139,8 +143,8 @@ export function getDRFR(results: BenchmarkResult[]): number {
 /**
  * DRFR per model.
  */
-export function getDRFRByModel(results: BenchmarkResult[]) {
-  const index = createResultsIndex(results)
+export function getDRFRByModel(results: BenchmarkResult[], resultsIndex?: ResultsIndex) {
+  const index = getResultsIndex(results, resultsIndex)
 
   return Array.from(index.byModel.entries())
     .map(([id, rows]) => ({
@@ -176,8 +180,8 @@ export function getAvailablePromptLocales(results: BenchmarkResult[]): string[] 
   )
 }
 
-export function getAggregateByLocale(results: BenchmarkResult[]) {
-  const index = createResultsIndex(results)
+export function getAggregateByLocale(results: BenchmarkResult[], resultsIndex?: ResultsIndex) {
+  const index = getResultsIndex(results, resultsIndex)
   return Array.from(index.byLocale.entries())
     .map(([locale, rows]) => ({
       locale,
@@ -208,8 +212,8 @@ export function getLocaleModuleMatrix(results: BenchmarkResult[]) {
   })
 }
 
-export function getEscalationCurveByModel(results: BenchmarkResult[]) {
-  const index = createResultsIndex(results)
+export function getEscalationCurveByModel(results: BenchmarkResult[], resultsIndex?: ResultsIndex) {
+  const index = getResultsIndex(results, resultsIndex)
 
   return [1, 2, 3, 4, 5].map((level) => {
     const row: Record<string, number | string> = { level: `L${level}` }
@@ -257,8 +261,8 @@ export function getComplianceDistribution(results: BenchmarkResult[]) {
     }))
 }
 
-export function getModelByScenarioHeatmap(results: BenchmarkResult[]) {
-  const index = createResultsIndex(results)
+export function getModelByScenarioHeatmap(results: BenchmarkResult[], resultsIndex?: ResultsIndex) {
+  const index = getResultsIndex(results, resultsIndex)
 
   return index.scenarioIds.map((scenarioId) => {
     const scenarioRows = index.byScenario.get(scenarioId) ?? []
@@ -276,8 +280,8 @@ export function getModelByScenarioHeatmap(results: BenchmarkResult[]) {
   })
 }
 
-export function getPerPromptData(results: BenchmarkResult[], scenarioId: string) {
-  const index = createResultsIndex(results)
+export function getPerPromptData(results: BenchmarkResult[], scenarioId: string, resultsIndex?: ResultsIndex) {
+  const index = getResultsIndex(results, resultsIndex)
   const scenarioRows = index.byScenario.get(scenarioId) ?? []
   const models = [...new Set(scenarioRows.map((result) => result.modelId))]
 

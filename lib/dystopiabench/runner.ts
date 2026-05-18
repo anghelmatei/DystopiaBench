@@ -1,5 +1,6 @@
 ﻿import { createHash } from "node:crypto"
 import { createOpenAI } from "@ai-sdk/openai"
+import { randomInt } from "node:crypto"
 import { OpenRouter } from "@openrouter/sdk"
 import type { ProviderPreferences } from "@openrouter/sdk/models"
 import { generateText, type ModelMessage } from "ai"
@@ -108,6 +109,11 @@ export const JUDGE_PROMPT_VERSION = "v6"
 const DEFAULT_REPLICATES = 3
 
 const RUN_LOG_PREFIX = bold(cyan("BENCH"))
+
+function randomJitterMs(maxExclusive: number): number {
+  const bounded = Math.max(0, Math.floor(maxExclusive))
+  return bounded > 0 ? randomInt(0, bounded) : 0
+}
 
 const COMPLIANCE_VALUES = [
   "refusal",
@@ -2668,14 +2674,14 @@ export async function runBenchmark(options: RunBenchmarkOptions): Promise<RunMan
     model: ResolvedModelSpec
     replicate: number
     levelsForScenario: Array<1 | 2 | 3 | 4 | 5>
+    escalationPromptByLevel: Map<number, Scenario["escalationPrompts"][number]>
     state: ConversationExecutionState
   }
 
   const conversationTasks: BenchmarkConversationTask[] = []
   for (const scenario of scenarios) {
-    const levelsForScenario = sortedLevels.filter((lvl) =>
-      scenario.escalationPrompts.some((p) => p.level === lvl)
-    )
+    const escalationPromptByLevel = new Map(scenario.escalationPrompts.map((prompt) => [prompt.level, prompt]))
+    const levelsForScenario = sortedLevels.filter((lvl) => escalationPromptByLevel.has(lvl))
     if (levelsForScenario.length === 0) continue
 
     for (const model of resolvedTestModels) {
@@ -2685,6 +2691,7 @@ export async function runBenchmark(options: RunBenchmarkOptions): Promise<RunMan
           model,
           replicate,
           levelsForScenario,
+          escalationPromptByLevel,
           state: {
             messages: [],
             continuity: "intact",
@@ -2707,7 +2714,7 @@ export async function runBenchmark(options: RunBenchmarkOptions): Promise<RunMan
     const useChatFirst = chatFirstModelIdSet.has(model.id) || chatFirstModelIdSet.has(model.modelString)
     await getModelLimiter(model.id)(async () => {
               if (options.abortSignal?.aborted) return
-              const escalationPrompt = scenario.escalationPrompts.find((prompt) => prompt.level === level)
+              const escalationPrompt = task.escalationPromptByLevel.get(level)
               if (!escalationPrompt) return
               const benchmarkPrompt = buildBenchmarkPrompt(escalationPrompt.prompt)
               const sampleId = buildStableSampleId({
@@ -2899,7 +2906,7 @@ export async function runBenchmark(options: RunBenchmarkOptions): Promise<RunMan
                       emptyResponseRetryCount++
                       const delay =
                         Math.pow(2, emptyResponseRetryCount) * retryBackoffBaseMs +
-                        Math.random() * retryBackoffJitterMs
+                        randomJitterMs(retryBackoffJitterMs)
                       console.warn(
                         `  ${yellow("retry")} ${model.id}: empty response (${emptyResponseRetryCount}/${maxEmptyResponseRetries}); waiting ${Math.round(delay)}ms.`
                       )
@@ -2973,7 +2980,7 @@ export async function runBenchmark(options: RunBenchmarkOptions): Promise<RunMan
                     retryCount++
                     const delay =
                       Math.pow(2, retryCount) * retryBackoffBaseMs +
-                      Math.random() * retryBackoffJitterMs
+                      randomJitterMs(retryBackoffJitterMs)
                     console.warn(
                       `  ${yellow("retry")} ${model.id}: model call failed (${retryCount}/${maxRetries}); waiting ${Math.round(delay)}ms.`
                     )

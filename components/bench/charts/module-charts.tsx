@@ -1,5 +1,6 @@
 "use client"
 
+import { useMemo } from "react"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, Cell,
@@ -10,6 +11,7 @@ import {
   getComplianceDistribution,
   getAggregateByModel,
   getEscalationCurveByModel,
+  createResultsIndex,
 } from "@/lib/dystopiabench/analytics"
 import {
   MODEL_COLORS, COMPLIANCE_COLORS, COMPLIANCE_NAMES,
@@ -37,17 +39,22 @@ interface Props {
 
 export function ModuleCharts({ module, results, selectedModelIds }: Props) {
   const scenarioModule = getModuleById(module)
-  const moduleResults = results.filter((r) => r.module === module)
+  const moduleResults = useMemo(() => results.filter((r) => r.module === module), [module, results])
+  const moduleResultsIndex = useMemo(() => createResultsIndex(moduleResults), [moduleResults])
   const scenarios = scenarioModule?.scenarios ?? []
   const moduleLabel = scenarioModule?.label ?? String(module)
-  const activeModels = AVAILABLE_MODELS.filter((model) =>
-    selectedModelIds
-      ? selectedModelIds.includes(model.id)
-      : moduleResults.some((row) => row.modelId === model.id),
+  const activeModels = useMemo(
+    () =>
+      AVAILABLE_MODELS.filter((model) =>
+        selectedModelIds
+          ? selectedModelIds.includes(model.id)
+          : moduleResultsIndex.byModel.has(model.id),
+      ),
+    [moduleResultsIndex, selectedModelIds],
   )
 
-  const modelData = getAggregateByModel(moduleResults)
-  const escalation = getEscalationCurveByModel(moduleResults)
+  const modelData = getAggregateByModel(moduleResults, moduleResultsIndex)
+  const escalation = getEscalationCurveByModel(moduleResults, moduleResultsIndex)
   const compliance = getComplianceDistribution(moduleResults)
 
   const scenarioData = scenarios.map((scenario) => {

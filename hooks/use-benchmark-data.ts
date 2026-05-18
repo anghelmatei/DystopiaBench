@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   getRunConversationMode,
   loadRuns,
@@ -68,6 +68,11 @@ export function useBenchmarkData(): BenchmarkDataState {
   const statefulLatestVersionRef = useRef<string | number | undefined>(undefined)
   const statelessLatestVersionRef = useRef<string | number | undefined>(undefined)
   const isolatedLoadedRef = useRef(false)
+  const statefulRunById = useMemo(
+    () => new Map(statefulRuns.map((run) => [run.id, run])),
+    [statefulRuns],
+  )
+  const latestStatefulRunId = statefulRuns[0]?.id
 
   const resolveStatefulRun = useCallback(async (
     runId: SelectedRunId,
@@ -176,14 +181,14 @@ export function useBenchmarkData(): BenchmarkDataState {
 
       setSelectedStatefulRunIdState(runId)
       const selectedRunVersion =
-        runId === "latest" ? undefined : getRunIndexVersion(statefulRuns.find((run) => run.id === runId))
-      const resolved = await resolveStatefulRun(runId, statefulRuns[0]?.id, selectedRunVersion)
+        runId === "latest" ? undefined : getRunIndexVersion(statefulRunById.get(runId))
+      const resolved = await resolveStatefulRun(runId, latestStatefulRunId, selectedRunVersion)
       setStatefulResults(resolved.results)
       setStatefulManifest(resolved.manifest)
       setStatefulLoadError(resolved.loadError)
       setStatefulMissingRun(resolved.missingRun)
     },
-    [resolveStatefulRun, statefulRuns],
+    [latestStatefulRunId, resolveStatefulRun, statefulRunById],
   )
 
   const refresh = useCallback(async () => {
@@ -199,12 +204,13 @@ export function useBenchmarkData(): BenchmarkDataState {
       setStatefulRuns(filteredStatefulRuns)
 
       const latestStatefulRunId = filteredStatefulRuns[0]?.id
+      const filteredStatefulRunById = new Map(filteredStatefulRuns.map((run) => [run.id, run]))
       statefulLatestVersionRef.current = getRunIndexVersion(filteredStatefulRuns[0])
       statelessLatestVersionRef.current = getRunIndexVersion(filteredStatelessRuns[0])
       const selectedRunVersion =
         selectedStatefulRunIdRef.current === "latest"
           ? undefined
-          : getRunIndexVersion(filteredStatefulRuns.find((run) => run.id === selectedStatefulRunIdRef.current))
+          : getRunIndexVersion(filteredStatefulRunById.get(selectedStatefulRunIdRef.current))
       const resolvedStateful = await resolveStatefulRun(
         selectedStatefulRunIdRef.current,
         latestStatefulRunId,
