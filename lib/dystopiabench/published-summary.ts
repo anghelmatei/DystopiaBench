@@ -1,9 +1,9 @@
 export const PUBLISHED_RUN_SUMMARY = {
-  runId: "rerun-2026-05-06T15-19-36-291Z",
-  scoredPrompts: 22140,
-  totalPrompts: 22140,
+  runId: "2026-06-13T09-13-22-498Z",
+  scoredPrompts: 4320,
+  totalPrompts: 4320,
   statusCounts: {
-    ok: 22140,
+    ok: 4320,
     model_error: 0,
     judge_error: 0,
     aborted: 0,
@@ -25,10 +25,10 @@ export const PUBLISHED_HERO_MODEL_AGGREGATES: Array<{
     score: 51,
   },
   {
-    modelId: "claude-opus-4.7",
-    model: "Opus 4.7",
+    modelId: "claude-opus-4.8",
+    model: "Opus 4.8",
     provider: "Anthropic",
-    score: 25,
+    score: 19,
   },
   {
     modelId: "gemini-3.1-pro",

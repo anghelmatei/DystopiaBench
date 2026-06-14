@@ -1,7 +1,15 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseModelIdentifier } from "./model-selectors"
-import { JUDGE_MODEL_OPTIONS, getEstimatedPricingByModelKey, getModelById, getModelByModelString } from "./models"
+import {
+  DEFAULT_JUDGE_MODEL,
+  JUDGE_MODEL_OPTIONS,
+  PAIR_WITH_TIEBREAK_ARBITER_MODEL,
+  PAIR_WITH_TIEBREAK_SECONDARY_JUDGE_MODEL,
+  getEstimatedPricingByModelKey,
+  getModelById,
+  getModelByModelString,
+} from "./models"
 
 test("getModelById resolves known curated models", () => {
   const model = getModelById("deepseek-v3.2")
@@ -26,6 +34,28 @@ test("getModelById resolves Mistral Medium 3.5 curated model", () => {
   assert.equal(getModelByModelString("mistralai/mistral-medium-3-5")?.id, "mistral-medium-3-5")
   assert.deepEqual(getEstimatedPricingByModelKey("mistral-medium-3-5"), { input: 1.5, output: 7.5 })
   assert.deepEqual(getEstimatedPricingByModelKey("mistralai/mistral-medium-3-5"), { input: 1.5, output: 7.5 })
+})
+
+test("getModelById resolves newly added run-bank models", () => {
+  const expectedModels = [
+    ["claude-opus-4.8", "anthropic/claude-opus-4.8", { input: 5.0, output: 25.0 }],
+    ["nemotron-3-ultra-550b-a55b", "nvidia/nemotron-3-ultra-550b-a55b", { input: 0.5, output: 2.5 }],
+    ["qwen3.7-plus", "qwen/qwen3.7-plus", { input: 0.32, output: 1.28 }],
+    ["qwen3.7-max", "qwen/qwen3.7-max", { input: 1.25, output: 3.75 }],
+    ["minimax-m3", "minimax/minimax-m3", { input: 0.3, output: 1.2 }],
+    ["kimi-k2.7-code", "moonshotai/kimi-k2.7-code", { input: 0.95, output: 4.0 }],
+    ["grok-build-0.1", "x-ai/grok-build-0.1", { input: 1.0, output: 2.0 }],
+    ["gemini-3.5-flash", "google/gemini-3.5-flash", { input: 1.5, output: 9.0 }],
+  ] as const
+
+  for (const [id, modelString, pricing] of expectedModels) {
+    const model = getModelById(id)
+    assert.ok(model, id)
+    assert.equal(model.modelString, modelString)
+    assert.equal(getModelByModelString(modelString)?.id, id)
+    assert.deepEqual(getEstimatedPricingByModelKey(id), pricing)
+    assert.deepEqual(getEstimatedPricingByModelKey(modelString), pricing)
+  }
 })
 
 test("getModelById rejects prototype-property keys", () => {
@@ -107,12 +137,21 @@ test("JUDGE_MODEL_OPTIONS includes the latest curated GLM judge", () => {
   assert.ok(JUDGE_MODEL_OPTIONS.some((model) => model.id === "glm-5.1"))
 })
 
-test("JUDGE_MODEL_OPTIONS includes Gemini 3 Flash (non-3.1-Lite) for judging", () => {
-  assert.ok(JUDGE_MODEL_OPTIONS.some((model) => model.id === "gemini-3-flash-preview"))
+test("JUDGE_MODEL_OPTIONS replaces older Gemini Flash and Opus judges", () => {
+  assert.ok(JUDGE_MODEL_OPTIONS.some((model) => model.id === "gemini-3.5-flash"))
+  assert.ok(JUDGE_MODEL_OPTIONS.some((model) => model.id === "claude-opus-4.8"))
+  assert.ok(!JUDGE_MODEL_OPTIONS.some((model) => model.id === "gemini-3-flash-preview"))
+  assert.ok(!JUDGE_MODEL_OPTIONS.some((model) => model.id === "claude-opus-4.7"))
 })
 
 test("JUDGE_MODEL_OPTIONS includes Haiku as a judge", () => {
   assert.ok(JUDGE_MODEL_OPTIONS.some((model) => model.id === "claude-haiku-4.5"))
+})
+
+test("pair-with-tiebreak judge defaults use GPT, Haiku, and Gemini Flash", () => {
+  assert.equal(DEFAULT_JUDGE_MODEL, "gpt-5.4-mini")
+  assert.equal(PAIR_WITH_TIEBREAK_SECONDARY_JUDGE_MODEL, "claude-haiku-4.5")
+  assert.equal(PAIR_WITH_TIEBREAK_ARBITER_MODEL, "gemini-3.5-flash")
 })
 
 test("JUDGE_MODEL_OPTIONS excludes full GPT 5.4 as a curated judge option", () => {

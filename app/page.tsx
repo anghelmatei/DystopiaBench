@@ -16,7 +16,7 @@ import { PUBLISHED_HERO_MODEL_AGGREGATES } from "@/lib/dystopiabench/published-s
 export default function DashboardPage() {
   const showLocalRunLink = process.env.NODE_ENV !== "production"
   const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-  const heroModelIds = ["gpt-5.5", "claude-opus-4.7", "gemini-3.1-pro", "deepseek-v4-pro"] as const
+  const heroModelIds = ["gpt-5.5", "claude-opus-4.8", "gemini-3.1-pro", "deepseek-v4-pro"] as const
   const heroAggregate = heroModelIds
     .map((modelId) => {
       const entry = PUBLISHED_HERO_MODEL_AGGREGATES.find((candidate) => candidate.modelId === modelId)

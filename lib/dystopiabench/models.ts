@@ -1,10 +1,10 @@
 import type { ModelConfig } from "./types"
 
 export const DEFAULT_JUDGE_MODEL = "gpt-5.4-mini"
-export const PAIR_WITH_TIEBREAK_SECONDARY_JUDGE_MODEL = "deepseek-v4-pro"
-export const PAIR_WITH_TIEBREAK_ARBITER_MODEL = "kimi-k2.6"
+export const PAIR_WITH_TIEBREAK_SECONDARY_JUDGE_MODEL = "claude-haiku-4.5"
+export const PAIR_WITH_TIEBREAK_ARBITER_MODEL = "gemini-3.5-flash"
 export const ESTIMATED_PRICING_SOURCE_LABEL = "OpenRouter Models API"
-export const ESTIMATED_PRICING_LAST_SYNC_DATE = "2026-05-06"
+export const ESTIMATED_PRICING_LAST_SYNC_DATE = "2026-06-13"
 
 export const AVAILABLE_MODELS: ModelConfig[] = [
   {
@@ -64,6 +64,14 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
     estimatedPricingUsdPer1M: { input: 0.03, output: 0.14 },
   },
   {
+    id: "claude-opus-4.8",
+    label: "Opus 4.8",
+    provider: "Anthropic",
+    modelString: "anthropic/claude-opus-4.8",
+    weightClass: "closed",
+    estimatedPricingUsdPer1M: { input: 5.0, output: 25.0 },
+  },
+  {
     id: "claude-opus-4.7",
     label: "Opus 4.7",
     provider: "Anthropic",
@@ -94,6 +102,14 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
     modelString: "anthropic/claude-haiku-4.5",
     weightClass: "closed",
     estimatedPricingUsdPer1M: { input: 1.0, output: 5.0 },
+  },
+  {
+    id: "gemini-3.5-flash",
+    label: "Gemini 3.5 Flash",
+    provider: "Google",
+    modelString: "google/gemini-3.5-flash",
+    weightClass: "closed",
+    estimatedPricingUsdPer1M: { input: 1.5, output: 9.0 },
   },
   {
     id: "gemini-3.1-pro",
@@ -144,6 +160,14 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
     estimatedPricingUsdPer1M: { input: 0.252, output: 0.378 },
   },
   {
+    id: "grok-build-0.1",
+    label: "Grok Build 0.1",
+    provider: "xAI",
+    modelString: "x-ai/grok-build-0.1",
+    weightClass: "closed",
+    estimatedPricingUsdPer1M: { input: 1.0, output: 2.0 },
+  },
+  {
     id: "grok-4.20-multi-agent",
     label: "Grok 4.20 Multi-Agent",
     provider: "xAI",
@@ -192,6 +216,14 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
     estimatedPricingUsdPer1M: { input: 0.08, output: 0.3 },
   },
   {
+    id: "nemotron-3-ultra-550b-a55b",
+    label: "Nemotron 3 Ultra 550B A55B",
+    provider: "NVIDIA",
+    modelString: "nvidia/nemotron-3-ultra-550b-a55b",
+    weightClass: "open_weight",
+    estimatedPricingUsdPer1M: { input: 0.5, output: 2.5 },
+  },
+  {
     id: "nemotron-3-super-120b-a12b",
     label: "Nemotron 3 Super 120B A12B",
     provider: "NVIDIA",
@@ -222,6 +254,14 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
     modelString: "mistralai/mistral-small-2603",
     weightClass: "open_weight",
     estimatedPricingUsdPer1M: { input: 0.15, output: 0.6 },
+  },
+  {
+    id: "kimi-k2.7-code",
+    label: "Kimi K2.7 Code",
+    provider: "Moonshot",
+    modelString: "moonshotai/kimi-k2.7-code",
+    weightClass: "open_weight",
+    estimatedPricingUsdPer1M: { input: 0.95, output: 4.0 },
   },
   {
     id: "kimi-k2.6",
@@ -256,6 +296,14 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
     estimatedPricingUsdPer1M: { input: 0.6, output: 2.08 },
   },
   {
+    id: "minimax-m3",
+    label: "MiniMax M3",
+    provider: "MiniMax",
+    modelString: "minimax/minimax-m3",
+    weightClass: "closed",
+    estimatedPricingUsdPer1M: { input: 0.3, output: 1.2 },
+  },
+  {
     id: "minimax-m2.7",
     label: "MiniMax M2.7",
     provider: "MiniMax",
@@ -270,6 +318,22 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
     modelString: "minimax/minimax-m2.5",
     weightClass: "closed",
     estimatedPricingUsdPer1M: { input: 0.15, output: 1.15 },
+  },
+  {
+    id: "qwen3.7-plus",
+    label: "Qwen 3.7 Plus",
+    provider: "Alibaba",
+    modelString: "qwen/qwen3.7-plus",
+    weightClass: "open_weight",
+    estimatedPricingUsdPer1M: { input: 0.32, output: 1.28 },
+  },
+  {
+    id: "qwen3.7-max",
+    label: "Qwen 3.7 Max",
+    provider: "Alibaba",
+    modelString: "qwen/qwen3.7-max",
+    weightClass: "open_weight",
+    estimatedPricingUsdPer1M: { input: 1.25, output: 3.75 },
   },
   {
     id: "qwen3.6-plus",
@@ -363,11 +427,11 @@ const ESTIMATED_PRICING_BY_MODEL_KEY = new Map<string, { input: number; output: 
 const CURATED_JUDGE_MODEL_IDS = [
   "gpt-5.5",
   DEFAULT_JUDGE_MODEL,
-  "claude-opus-4.7",
+  "claude-opus-4.8",
   "claude-sonnet-4.6",
   "claude-haiku-4.5",
   "gemini-3.1-pro",
-  "gemini-3-flash-preview",
+  "gemini-3.5-flash",
   "glm-5.1",
   PAIR_WITH_TIEBREAK_SECONDARY_JUDGE_MODEL,
   PAIR_WITH_TIEBREAK_ARBITER_MODEL,
