@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
+import { gunzipSync } from "node:zlib"
 import {
   ALL_MODULES,
   ALL_SCENARIOS,
@@ -76,12 +77,14 @@ function parseArchiveDir(input: string | undefined): string | undefined {
 function loadManifest(runId: string): RunManifestV2 {
   const dataDir = getDataDir()
   const path = join(dataDir, `benchmark-${sanitizeRunId(runId)}.json`)
+  const gzipPath = `${path}.gz`
 
-  if (!existsSync(path)) {
+  if (!existsSync(path) && !existsSync(gzipPath)) {
     throw new Error(`Run file not found: ${path}`)
   }
 
-  const raw = JSON.parse(readFileSync(path, "utf8")) as unknown
+  const contents = existsSync(path) ? readFileSync(path, "utf8") : gunzipSync(readFileSync(gzipPath)).toString("utf8")
+  const raw = JSON.parse(contents) as unknown
   const parsed = runManifestV2Schema.safeParse(raw)
   if (!parsed.success) {
     throw new Error(`Run file is not a valid benchmark manifest: ${path}`)
@@ -147,6 +150,20 @@ function assertEqual(label: string, left: unknown, right: unknown) {
   if (stableStringify(left) !== stableStringify(right)) {
     throw new Error(`${label} mismatch between base and patch runs.`)
   }
+}
+
+function valuesEqual(left: unknown, right: unknown): boolean {
+  return stableStringify(left) === stableStringify(right)
+}
+
+const JUDGE_PANEL_CHANGE_NOTE =
+  "Judge panel changed for appended model rows because the previous judge models were flaky through the OpenRouter API."
+
+function mergePurposeWithJudgePanelNote(basePurpose?: string, patchPurpose?: string): string {
+  return unique(
+    [basePurpose, patchPurpose, JUDGE_PANEL_CHANGE_NOTE]
+      .filter((value): value is string => Boolean(value?.trim())),
+  ).join(" ")
 }
 
 function mergeCapabilities(
@@ -228,9 +245,22 @@ export function mergeRunManifests(
     throw new Error("This merge utility is intended for stateful escalation runs.")
   }
 
-  assertEqual("judgeStrategy", normalizeJudgeStrategy(base.metadata), normalizeJudgeStrategy(patch.metadata))
-  assertEqual("judgeModel", base.metadata.judgeModel, patch.metadata.judgeModel)
-  assertEqual("judgeModels", normalizeJudgeModels(base.metadata), normalizeJudgeModels(patch.metadata))
+  const baseJudgeStrategy = normalizeJudgeStrategy(base.metadata)
+  const patchJudgeStrategy = normalizeJudgeStrategy(patch.metadata)
+  const baseJudgeModels = normalizeJudgeModels(base.metadata)
+  const patchJudgeModels = normalizeJudgeModels(patch.metadata)
+  const judgePanelChanged =
+    !valuesEqual(baseJudgeStrategy, patchJudgeStrategy) ||
+    !valuesEqual(base.metadata.judgeModel, patch.metadata.judgeModel) ||
+    !valuesEqual(baseJudgeModels, patchJudgeModels) ||
+    !valuesEqual(base.metadata.judgeTieBreakerModel, patch.metadata.judgeTieBreakerModel)
+
+  if (!options.allowAdditiveModels || !judgePanelChanged) {
+    assertEqual("judgeStrategy", baseJudgeStrategy, patchJudgeStrategy)
+    assertEqual("judgeModel", base.metadata.judgeModel, patch.metadata.judgeModel)
+    assertEqual("judgeModels", baseJudgeModels, patchJudgeModels)
+    assertEqual("judgeTieBreakerModel", base.metadata.judgeTieBreakerModel, patch.metadata.judgeTieBreakerModel)
+  }
   assertEqual("systemPromptVersion", base.metadata.systemPromptVersion, patch.metadata.systemPromptVersion)
   assertEqual("benchmarkPromptVersion", base.metadata.benchmarkPromptVersion, patch.metadata.benchmarkPromptVersion)
   assertEqual("judgePromptVersion", base.metadata.judgePromptVersion, patch.metadata.judgePromptVersion)
@@ -302,8 +332,8 @@ export function mergeRunManifests(
     selectedScenarioIds: allSelectedScenarioIds,
     selectedScenarioCount: allSelectedScenarioIds.length,
     judgeModel: base.metadata.judgeModel,
-    judgeModels: normalizeJudgeModels(base.metadata),
-    judgeStrategy: normalizeJudgeStrategy(base.metadata),
+    judgeModels: judgePanelChanged ? unique([...baseJudgeModels, ...patchJudgeModels]) : baseJudgeModels,
+    judgeStrategy: judgePanelChanged ? "pair-with-tiebreak" : baseJudgeStrategy,
     judgeTieBreakerModel: base.metadata.judgeTieBreakerModel ?? patch.metadata.judgeTieBreakerModel,
     systemPromptVersion: base.metadata.systemPromptVersion,
     benchmarkPromptVersion: base.metadata.benchmarkPromptVersion,
@@ -311,6 +341,9 @@ export function mergeRunManifests(
     transportPolicy: base.metadata.transportPolicy,
     conversationMode: baseMode,
     providerPrecisionPolicy: base.metadata.providerPrecisionPolicy,
+    purpose: judgePanelChanged
+      ? mergePurposeWithJudgePanelNote(base.metadata.purpose, patch.metadata.purpose)
+      : base.metadata.purpose ?? patch.metadata.purpose,
     sourceLocale: base.metadata.sourceLocale,
     promptLocale: base.metadata.promptLocale,
     modelCapabilitiesSnapshot: mergeCapabilities(

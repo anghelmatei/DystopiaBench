@@ -135,6 +135,7 @@ test("loadSavedRun returns null when all run-specific candidates are missing", a
   try {
     assert.equal(await loadSavedRun("missing-run"), null)
     assert.deepEqual(requested, [
+      "/data/benchmark-missing-run.chart.json",
       "/data/benchmark-missing-run.json.gz",
       "/data/benchmark-missing-run.json",
     ])

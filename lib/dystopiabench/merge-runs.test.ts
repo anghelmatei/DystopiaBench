@@ -76,12 +76,19 @@ test("mergeRunManifests rejects additive overlap", () => {
   )
 })
 
-test("mergeRunManifests still rejects scoring semantic mismatches", () => {
+test("mergeRunManifests allows additive judge panel changes with a provenance note", () => {
   const base = manifestForModel("model-a", "sample-a")
   const patch = manifestForModel("model-b", "sample-b", { judgeModels: ["different-judge"] })
 
-  assert.throws(
-    () => mergeRunManifests(base, patch, { runId: "merged-run", allowAdditiveModels: true }),
-    /judgeModels mismatch/
-  )
+  const merged = mergeRunManifests(base, patch, { runId: "merged-run", allowAdditiveModels: true })
+
+  assert.deepEqual(merged.metadata.judgeModels, ["google/gemini-3-flash-preview", "different-judge"])
+  assert.match(merged.metadata.purpose ?? "", /previous judge models were flaky through the OpenRouter API/)
+})
+
+test("mergeRunManifests still rejects non-additive judge panel changes", () => {
+  const base = manifestForModel("model-a", "sample-a")
+  const patch = manifestForModel("model-b", "sample-b", { judgeModels: ["different-judge"] })
+
+  assert.throws(() => mergeRunManifests(base, patch, { runId: "merged-run" }), /judgeModels mismatch/)
 })

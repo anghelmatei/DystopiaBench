@@ -1,5 +1,282 @@
 [
   {
+    "id": "main-plus-june-2026-models",
+    "timestamp": 1781395200000,
+    "date": "2026-06-14T00:00:00.000Z",
+    "metadata": {
+      "module": "both",
+      "models": [
+        "gpt-5.5",
+        "gpt-5.4",
+        "gpt-5.4-mini",
+        "gpt-5.3-codex",
+        "gpt-oss-safeguard-20b",
+        "gpt-oss-120b",
+        "gpt-oss-20b",
+        "claude-opus-4.7",
+        "claude-opus-4.6",
+        "claude-sonnet-4.6",
+        "claude-haiku-4.5",
+        "gemini-3.1-pro",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3-flash-preview",
+        "deepseek-v4-pro",
+        "deepseek-v4-flash",
+        "deepseek-v3.2",
+        "grok-4.20-multi-agent",
+        "grok-4.20",
+        "grok-4",
+        "llama-4-maverick",
+        "llama-4-scout",
+        "nemotron-3-super-120b-a12b",
+        "mistral-large-3",
+        "mistral-small-2603",
+        "kimi-k2.6",
+        "kimi-k2.5",
+        "glm-5.1",
+        "glm-5",
+        "minimax-m2.7",
+        "minimax-m2.5",
+        "qwen3.6-plus",
+        "qwen3.6-max-preview",
+        "qwen3.5",
+        "mimo-v2.5-pro",
+        "mimo-v2.5",
+        "seed-2.0-lite",
+        "seed-2.0-mini",
+        "trinity-large-thinking",
+        "tencent-hy3-preview-free",
+        "grok-4.3",
+        "mistral-medium-3-5",
+        "claude-opus-4.8",
+        "gemini-3.5-flash",
+        "grok-build-0.1",
+        "nemotron-3-ultra-550b-a55b",
+        "kimi-k2.7-code",
+        "minimax-m3",
+        "qwen3.7-max",
+        "qwen3.7-plus"
+      ],
+      "levels": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "totalPrompts": 27000,
+      "judgeModel": "gpt-5.4-mini",
+      "systemPromptVersion": "v5",
+      "benchmarkPromptVersion": "v6",
+      "judgePromptVersion": "v6",
+      "generationConfig": {
+        "model": {
+          "temperature": 0,
+          "topP": 1,
+          "maxOutputTokens": 1500
+        },
+        "judge": {
+          "temperature": 0,
+          "topP": 1,
+          "maxOutputTokens": 220
+        },
+        "retryPolicy": {
+          "maxRetries": 0,
+          "backoffBaseMs": 1000,
+          "backoffJitterMs": 1000
+        },
+        "timeoutMs": 45000,
+        "concurrency": 12,
+        "perModelConcurrency": 1,
+        "scheduler": "level-wave",
+        "chatFirstModelIds": [
+          "gpt-oss-safeguard-20b",
+          "gpt-oss-120b",
+          "gpt-oss-20b",
+          "deepseek-v4-pro",
+          "deepseek-v4-flash",
+          "deepseek-v3.2",
+          "trinity-large-thinking",
+          "kimi-k2.6",
+          "kimi-k2.5",
+          "glm-5.1",
+          "glm-5",
+          "minimax-m2.7",
+          "minimax-m2.5",
+          "qwen3.6-plus",
+          "qwen3.6-max-preview",
+          "qwen3.5",
+          "mistral-large-3",
+          "seed-2.0-lite",
+          "seed-2.0-mini",
+          "grok-4.20-multi-agent",
+          "grok-4.20",
+          "grok-4",
+          "tencent-hy3-preview-free"
+        ],
+        "fallbackOnTimeout": false
+      },
+      "promptLocale": "en",
+      "sourceLocale": "en",
+      "scenarioCatalogVersion": "7423c680320217f5",
+      "scenarioModuleIds": [
+        "petrov",
+        "orwell",
+        "laguardia",
+        "basaglia",
+        "huxley",
+        "baudrillard"
+      ],
+      "selectedScenarioIds": [
+        "petrov-01",
+        "petrov-02",
+        "petrov-03",
+        "petrov-04",
+        "petrov-05",
+        "petrov-06",
+        "orwell-01",
+        "orwell-02",
+        "orwell-03",
+        "orwell-04",
+        "orwell-05",
+        "orwell-06",
+        "laguardia-01",
+        "laguardia-03",
+        "laguardia-04",
+        "laguardia-05",
+        "laguardia-06",
+        "laguardia-02",
+        "basaglia-01",
+        "basaglia-02",
+        "basaglia-03",
+        "basaglia-04",
+        "basaglia-05",
+        "basaglia-06",
+        "huxley-01",
+        "huxley-02",
+        "huxley-03",
+        "huxley-04",
+        "huxley-05",
+        "huxley-06",
+        "baudrillard-01",
+        "baudrillard-02",
+        "baudrillard-03",
+        "baudrillard-04",
+        "baudrillard-05",
+        "baudrillard-06"
+      ],
+      "selectedScenarioCount": 36,
+      "judgeModels": [
+        "gpt-5.4-mini",
+        "claude-haiku-4.5",
+        "kimi-k2.6",
+        "deepseek-v4-pro"
+      ],
+      "judgeStrategy": "pair-with-tiebreak",
+      "judgeTieBreakerModel": "kimi-k2.6",
+      "transportPolicy": "chat-first-fallback",
+      "conversationMode": "stateful",
+      "providerPrecisionPolicy": "default",
+      "purpose": "Judge panel changed for appended model rows because the previous judge models were flaky through the OpenRouter API."
+    },
+    "summary": {
+      "totalPrompts": 27000,
+      "scoredPrompts": 27000,
+      "averageDcs": 59,
+      "drfr": 16,
+      "statusCounts": {
+        "ok": 27000,
+        "model_error": 0,
+        "judge_error": 0,
+        "aborted": 0,
+        "invalid_response": 0,
+        "skipped": 0
+      },
+      "modelSuccessRate": 100,
+      "judgeSuccessRate": 100,
+      "scorableRate": 100,
+      "scoreStdDev": 27.54,
+      "minScore": 0,
+      "maxScore": 100,
+      "riskSlices": {
+        "l1L2AverageDcs": 65,
+        "l3L5AverageDcs": 55,
+        "reliabilityAdjustedAverageDcs": 59,
+        "moduleAverageDcs": {
+          "petrov": 65,
+          "orwell": 59,
+          "laguardia": 60,
+          "basaglia": 57,
+          "huxley": 60,
+          "baudrillard": 54
+        }
+      },
+      "auxiliaryLabelCoverage": {
+        "rowCoverageRate": 99.55,
+        "harmAwarenessRate": 99.55,
+        "boundaryClarityRate": 99.55,
+        "alternativeSafeHelpfulnessRate": 99.55,
+        "manipulationResistanceRate": 99.55,
+        "proceduralDeferralRate": 99.55
+      },
+      "repeatStats": {
+        "targetReplicates": 3,
+        "totalTuples": 9000,
+        "scoredTuples": 9000,
+        "averageObservedReplicates": 3,
+        "fullyObservedTupleCount": 9000,
+        "partiallyObservedTupleCount": 0,
+        "meanWithinTupleStdDev": 6.08,
+        "maxWithinTupleStdDev": 47.14
+      },
+      "telemetry": {
+        "modelUsage": {
+          "inputTokens": 153063638,
+          "cachedInputTokens": 12601334,
+          "uncachedInputTokens": 140462304,
+          "outputTokens": 80142056,
+          "textOutputTokens": 63776356,
+          "reasoningTokens": 16468141,
+          "totalTokens": 233205694
+        },
+        "judgeUsage": {
+          "inputTokens": 83802056,
+          "cachedInputTokens": 2138817,
+          "uncachedInputTokens": 81663239,
+          "outputTokens": 8998408,
+          "textOutputTokens": 4556997,
+          "reasoningTokens": 5179074,
+          "totalTokens": 92800464
+        },
+        "totalUsage": {
+          "inputTokens": 236865694,
+          "cachedInputTokens": 14740151,
+          "uncachedInputTokens": 222125543,
+          "outputTokens": 89140464,
+          "textOutputTokens": 68333353,
+          "reasoningTokens": 21647215,
+          "totalTokens": 326006158
+        },
+        "estimatedCostUsd": {
+          "modelUsd": 548.736002,
+          "judgeUsd": 106.264999,
+          "totalUsd": 655.001001
+        },
+        "averageModelLatencyMs": 62906.25,
+        "averageJudgeLatencyMs": 17228,
+        "averageRowLatencyMs": 80134.24,
+        "runWallTimeMs": 0,
+        "tokenCoverageRate": 99.99,
+        "reasoningTokenCoverageRate": 52.84
+      },
+      "judgeAgreement": {
+        "judgeCount": 3,
+        "exactAgreementRate": 71,
+        "averagePairwiseAgreementRate": 64
+      }
+    }
+  },
+  {
     "id": "2026-06-13T09-13-22-498Z",
     "timestamp": 1781384165778,
     "date": "2026-06-13T20:56:05.778Z",
@@ -23,31 +300,6 @@
         5
       ],
       "totalPrompts": 4320,
-      "judgeModel": "gpt-5.4-mini",
-      "systemPromptVersion": "v5",
-      "benchmarkPromptVersion": "v6",
-      "judgePromptVersion": "v6",
-      "generationConfig": {
-        "model": {
-          "temperature": 0,
-          "topP": 1
-        },
-        "judge": {
-          "temperature": 0,
-          "topP": 1
-        },
-        "retryPolicy": {
-          "maxRetries": 2,
-          "backoffBaseMs": 1000,
-          "backoffJitterMs": 1000
-        },
-        "timeoutMs": 600000,
-        "concurrency": 192,
-        "perModelConcurrency": 12,
-        "scheduler": "level-wave",
-        "chatFirstModelIds": [],
-        "fallbackOnTimeout": true
-      },
       "promptLocale": "en",
       "sourceLocale": "en",
       "benchmarkDefinition": {
@@ -56,6 +308,14 @@
         "benchmarkBundleVersion": "1.0.0",
         "datasetBundleVersion": "dystopiabench-core@1.0.0",
         "scenarioCatalogVersion": "7423c680320217f5",
+        "scenarioModuleIds": [
+          "petrov",
+          "orwell",
+          "laguardia",
+          "basaglia",
+          "huxley",
+          "baudrillard"
+        ],
         "selectedScenarioIds": [
           "petrov-01",
           "petrov-02",
@@ -93,14 +353,6 @@
           "baudrillard-04",
           "baudrillard-05",
           "baudrillard-06"
-        ],
-        "scenarioModuleIds": [
-          "petrov",
-          "orwell",
-          "laguardia",
-          "basaglia",
-          "huxley",
-          "baudrillard"
         ],
         "selectedScenarioCount": 36,
         "scoringRubricVersion": "dcs-4tier-v2",
@@ -162,6 +414,7 @@
         "baudrillard-06"
       ],
       "selectedScenarioCount": 36,
+      "judgeModel": "gpt-5.4-mini",
       "judgeModels": [
         "gpt-5.4-mini",
         "deepseek-v4-pro",
@@ -169,6 +422,9 @@
       ],
       "judgeStrategy": "pair-with-tiebreak",
       "judgeTieBreakerModel": "claude-haiku-4.5",
+      "systemPromptVersion": "v5",
+      "benchmarkPromptVersion": "v6",
+      "judgePromptVersion": "v6",
       "artifactPolicy": {
         "visibility": "public",
         "publicSafe": true,
@@ -190,7 +446,28 @@
       "splitSummary": {
         "public-core": 4320
       },
-      "evalCardPath": "public\\data\\eval-cards\\eval-card-2026-06-13T09-13-22-498Z.json"
+      "evalCardPath": "public\\data\\eval-cards\\eval-card-2026-06-13T09-13-22-498Z.json",
+      "generationConfig": {
+        "model": {
+          "temperature": 0,
+          "topP": 1
+        },
+        "judge": {
+          "temperature": 0,
+          "topP": 1
+        },
+        "retryPolicy": {
+          "maxRetries": 2,
+          "backoffBaseMs": 1000,
+          "backoffJitterMs": 1000
+        },
+        "timeoutMs": 600000,
+        "concurrency": 192,
+        "perModelConcurrency": 12,
+        "scheduler": "level-wave",
+        "chatFirstModelIds": [],
+        "fallbackOnTimeout": true
+      }
     },
     "summary": {
       "totalPrompts": 4320,

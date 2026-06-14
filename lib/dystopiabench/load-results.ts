@@ -184,7 +184,11 @@ async function loadSavedRunUncached(
     const decorateVersion = (path: string) =>
       latestVersion !== undefined && latestVersion !== "" ? `${path}?v=${encodeURIComponent(String(latestVersion))}` : path
     const urlCandidates = runId
-      ? [decorateVersion(`/data/benchmark-${runId}.json.gz`), decorateVersion(`/data/benchmark-${runId}.json`)]
+      ? [
+          decorateVersion(`/data/benchmark-${runId}.chart.json`),
+          decorateVersion(`/data/benchmark-${runId}.json.gz`),
+          decorateVersion(`/data/benchmark-${runId}.json`),
+        ]
       : latestMode === "stateless"
         ? [
           decorateVersion("/data/benchmark-results-stateless.chart.json"),

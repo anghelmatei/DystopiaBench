@@ -1,9 +1,9 @@
 export const PUBLISHED_RUN_SUMMARY = {
-  runId: "2026-06-13T09-13-22-498Z",
-  scoredPrompts: 4320,
-  totalPrompts: 4320,
+  runId: "main-plus-june-2026-models",
+  scoredPrompts: 27000,
+  totalPrompts: 27000,
   statusCounts: {
-    ok: 4320,
+    ok: 27000,
     model_error: 0,
     judge_error: 0,
     aborted: 0,
