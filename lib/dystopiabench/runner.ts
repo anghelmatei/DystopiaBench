@@ -155,6 +155,7 @@ export interface RunBenchmarkOptions {
   runId: string
   module: BenchmarkModuleSelector
   modelIds: string[]
+  modelReasoningVariants?: ModelReasoningVariant[]
   levels: Array<1 | 2 | 3 | 4 | 5>
   scenarioIds?: string[]
   judgeModel?: string
@@ -199,6 +200,15 @@ export interface RunBenchmarkOptions {
   abortSignal?: AbortSignal
   onSetup?: (payload: { total: number }) => void | Promise<void>
   onResult?: (payload: { row: BenchmarkResultV2; completed: number; total: number }) => void | Promise<void>
+}
+
+export interface ModelReasoningVariant {
+  modelId: string
+  suffix: string
+  openRouterRequest: {
+    reasoning?: Record<string, unknown>
+    verbosity?: string
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1166,6 +1176,7 @@ async function openRouterChatFallback(
   config: GenerationConfigOverride,
   timeoutMs: number,
   providerOverride?: OpenRouterProviderOverride,
+  requestOverride?: ModelReasoningVariant["openRouterRequest"],
   trace?: OpenRouterRequestTrace,
   endpointUsed: Extract<EndpointUsed, "openrouter_chat_primary" | "openrouter_chat_fallback"> = "openrouter_chat_fallback",
   transportMode: "sdk-first" | "chat-first" = "sdk-first",
@@ -1188,6 +1199,7 @@ async function openRouterChatFallback(
         messages,
         temperature: config.temperature,
         top_p: config.topP,
+        ...(requestOverride ?? {}),
         ...(trace
           ? {
               session_id: trace.sessionId,
@@ -1275,6 +1287,7 @@ async function callModel(
   transportPolicy: TransportPolicy,
   timeoutMs: number,
   providerOverride?: OpenRouterProviderOverride,
+  requestOverride?: ModelReasoningVariant["openRouterRequest"],
   trace?: OpenRouterRequestTrace,
   callPhase = "model",
   chatFirst = false,
@@ -1315,6 +1328,7 @@ async function callModel(
                 temperature: config.temperature,
                 topP: config.topP,
                 stream: false,
+                ...(requestOverride ?? {}),
                 sessionId: trace?.sessionId,
                 ...(trace
                   ? {
@@ -1380,6 +1394,7 @@ async function callModel(
           config,
           timeoutMs,
           providerOverride,
+          requestOverride,
           trace,
           "openrouter_chat_primary",
           "chat-first",
@@ -1453,6 +1468,7 @@ async function callModel(
           config,
           timeoutMs,
           providerOverride,
+          requestOverride,
           trace,
           "openrouter_chat_fallback",
           "sdk-first",
@@ -1749,6 +1765,7 @@ async function runSingleJudge(
         timeoutMs,
         providerOverride,
         undefined,
+        undefined,
         `judge:${role}`,
         false,
         fallbackOnTimeout,
@@ -1812,6 +1829,7 @@ async function runArbiterJudge(
         transportPolicy,
         timeoutMs,
         providerOverride,
+        undefined,
         undefined,
         "judge:arbiter",
         false,
@@ -2404,7 +2422,20 @@ export function summarizeResults(
 // ---------------------------------------------------------------------------
 
 export async function runBenchmark(options: RunBenchmarkOptions): Promise<RunManifestV2> {
-  const resolvedTestModels = options.modelIds.map((id) => parseModelIdentifier(id))
+  const modelRequestOverridesByModelId = new Map<string, ModelReasoningVariant["openRouterRequest"]>()
+  const resolvedTestModels =
+    options.modelReasoningVariants && options.modelReasoningVariants.length > 0
+      ? options.modelReasoningVariants.map((variant) => {
+          const baseModel = parseModelIdentifier(variant.modelId)
+          const variantId = `${baseModel.id}__${variant.suffix}`
+          modelRequestOverridesByModelId.set(variantId, variant.openRouterRequest)
+          return {
+            ...baseModel,
+            id: variantId,
+            label: `${baseModel.label} (${variant.suffix})`,
+          }
+        })
+      : options.modelIds.map((id) => parseModelIdentifier(id))
   if (resolvedTestModels.length === 0) {
     throw new Error("No valid models selected.")
   }
@@ -2711,6 +2742,7 @@ export async function runBenchmark(options: RunBenchmarkOptions): Promise<RunMan
 
     const { scenario, model, replicate, state } = task
     const providerOverride = providerOverridesByModelString.get(model.modelString)
+    const requestOverride = modelRequestOverridesByModelId.get(model.id)
     const useChatFirst = chatFirstModelIdSet.has(model.id) || chatFirstModelIdSet.has(model.modelString)
     await getModelLimiter(model.id)(async () => {
               if (options.abortSignal?.aborted) return
@@ -2883,6 +2915,7 @@ export async function runBenchmark(options: RunBenchmarkOptions): Promise<RunMan
                     transportPolicy,
                     timeoutMs,
                     providerOverride,
+                    requestOverride,
                     trace,
                     "model",
                     useChatFirst,

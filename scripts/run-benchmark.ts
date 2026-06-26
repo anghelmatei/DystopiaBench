@@ -44,6 +44,7 @@ import {
 import {
   runBenchmark,
   type JudgeStrategy,
+  type ModelReasoningVariant,
   type ProviderPrecisionPolicy,
   type SchedulerMode,
   type TransportPolicy,
@@ -385,6 +386,46 @@ function parseLocalePack(input: string | undefined) {
   return validateScenarioLocalePack(JSON.parse(readFileSync(input, "utf-8")) as unknown)
 }
 
+function sanitizeReasoningSuffix(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-")
+}
+
+function parseModelReasoningVariants(input: string | undefined): ModelReasoningVariant[] | undefined {
+  const values = normalizeModelInputList(input)
+  if (values.length === 0) return undefined
+
+  return values.map((value) => {
+    const separatorIndex = value.lastIndexOf(":")
+    if (separatorIndex <= 0 || separatorIndex === value.length - 1) {
+      throw new Error(
+        "Invalid --model-reasoning-variants entry. Use model:level, e.g. gpt-5.5:high."
+      )
+    }
+
+    const modelId = value.slice(0, separatorIndex).trim()
+    const level = value.slice(separatorIndex + 1).trim().toLowerCase()
+    if (!modelId || !level) {
+      throw new Error("Invalid --model-reasoning-variants entry. Model and level are required.")
+    }
+
+    const suffix = `reasoning-${sanitizeReasoningSuffix(level)}`
+    const openRouterRequest = /opus/i.test(modelId)
+      ? {
+          reasoning: { enabled: true },
+          verbosity: level,
+        }
+      : {
+          reasoning: { effort: level },
+        }
+
+    return {
+      modelId,
+      suffix,
+      openRouterRequest,
+    }
+  })
+}
+
 async function main() {
   const resumeRequested = hasFlag("--resume")
   const requestedRunId = parseArg("--run-id")
@@ -414,6 +455,9 @@ async function main() {
   const models = parseArg("--models")
     ? parseModels(parseArg("--models"))
     : checkpointConfig?.modelIds ?? AVAILABLE_MODELS.map((model) => model.id)
+  const modelReasoningVariants = parseArg("--model-reasoning-variants")
+    ? parseModelReasoningVariants(parseArg("--model-reasoning-variants"))
+    : checkpointConfig?.modelReasoningVariants as ModelReasoningVariant[] | undefined
   const judgeModel = parseArg("--judge-model") ?? checkpointConfig?.judgeModel
   const judgeStrategy = parseJudgeStrategy(parseArg("--judge-strategy") ?? checkpointConfig?.judgeStrategy)
   const judgeModelsArg = parseArg("--judge-models")
@@ -519,6 +563,12 @@ async function main() {
     ["Resume", resumeRequested ? "yes" : "no"],
     ["Modules", moduleArg],
     ["Models", models.join(", ")],
+    [
+      "Reasoning variants",
+      modelReasoningVariants
+        ? modelReasoningVariants.map((variant) => `${variant.modelId}:${variant.suffix.replace(/^reasoning-/, "")}`).join(", ")
+        : undefined,
+    ],
     ["Levels", levels.join(", ")],
     ["Scenarios", scenarioSummary],
     ["Judge strategy", judgeStrategy],
@@ -557,6 +607,7 @@ async function main() {
   const checkpointConfigValue: RunCheckpointConfig = {
     module: String(moduleArg),
     modelIds: models,
+    modelReasoningVariants,
     levels,
     scenarioIds,
     judgeModel: judgeModel ?? undefined,
@@ -700,6 +751,7 @@ async function main() {
       runId,
       module: moduleArg,
       modelIds: models,
+      modelReasoningVariants,
       levels,
       scenarioIds,
       judgeModel,

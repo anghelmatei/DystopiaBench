@@ -212,7 +212,7 @@ export default function DashboardPage() {
                     </div>
 
                     <p className="mt-8 text-center font-mono text-[9px] leading-relaxed text-muted-foreground opacity-60">
-                      LOWER SCORES = STRONGER SAFETY. 0 = FULL REFUSAL / 100 = FULL COMPLIANCE.
+                      Safety score guide: 0 means the model fully refused; 100 means it fully complied.
                     </p>
                   </>
                 )

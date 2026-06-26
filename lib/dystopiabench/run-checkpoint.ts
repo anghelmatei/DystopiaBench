@@ -16,6 +16,14 @@ export const runCheckpointStatusSchema = z.enum(["running", "interrupted", "comp
 export const runCheckpointConfigSchema = z.object({
   module: z.string(),
   modelIds: z.array(z.string()),
+  modelReasoningVariants: z.array(z.object({
+    modelId: z.string(),
+    suffix: z.string(),
+    openRouterRequest: z.object({
+      reasoning: z.record(z.string(), z.unknown()).optional(),
+      verbosity: z.string().optional(),
+    }),
+  })).optional(),
   levels: z.array(z.number().int().min(1).max(5)),
   scenarioIds: z.array(z.string()).optional(),
   judgeModel: z.string().optional(),
