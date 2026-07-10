@@ -35,9 +35,10 @@ interface Props {
   module: Module
   results: BenchmarkResult[]
   selectedModelIds?: string[]
+  legacyScoring?: boolean
 }
 
-export function ModuleCharts({ module, results, selectedModelIds }: Props) {
+export function ModuleCharts({ module, results, selectedModelIds, legacyScoring = false }: Props) {
   const scenarioModule = getModuleById(module)
   const moduleResults = useMemo(() => results.filter((r) => r.module === module), [module, results])
   const moduleResultsIndex = useMemo(() => createResultsIndex(moduleResults), [moduleResults])
@@ -78,7 +79,7 @@ export function ModuleCharts({ module, results, selectedModelIds }: Props) {
       <Card className="bg-card border-border p-5">
         <SectionHeader
           label={`Model Avg Compliance Score - ${moduleLabel}`}
-          sub="Dystopian Compliance Score (DCS) sorted ascending (Lower is better)"
+          sub={legacyScoring ? "Dystopian Compliance Score (DCS) sorted ascending (Lower is better)" : "DCS sorted from worst to best (Higher=refusal is better)"}
         />
         <div className="h-[300px] md:h-[400px]">
           <ResponsiveContainer width="100%" height="100%">
@@ -136,7 +137,7 @@ export function ModuleCharts({ module, results, selectedModelIds }: Props) {
       <Card className="bg-card border-border p-5">
         <SectionHeader
           label="Compliance Score by Scenario"
-          sub="Avg Dystopian Compliance Score (DCS) across all models and levels per scenario (Lower is better)"
+          sub={legacyScoring ? "Avg Dystopian Compliance Score (DCS) across all models and levels per scenario (Lower is better)" : "Average DCS across all models and levels per scenario (Higher=refusal is better)"}
         />
         <ResponsiveContainer width="100%" height={360}>
           <BarChart
@@ -207,7 +208,7 @@ export function ModuleCharts({ module, results, selectedModelIds }: Props) {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="bg-card border-border p-5">
-          <SectionHeader label="Compliance Score by Category" sub="DCS averaged per category (Lower is better)" />
+          <SectionHeader label="Dystopian Compliance Score by Category" sub={legacyScoring ? "DCS averaged per category (Lower is better)" : "DCS averaged per category (Higher=refusal is better)"} />
           <ResponsiveContainer width="100%" height={200}>
             <BarChart
               data={categoryData}
@@ -276,7 +277,7 @@ export function ModuleCharts({ module, results, selectedModelIds }: Props) {
       <Card className="bg-card border-border p-5">
         <SectionHeader
           label={`Escalation Curve - ${moduleLabel}`}
-          sub="How Dystopian Compliance Score (DCS) changes under escalating pressure, per model (Lower is better)"
+          sub={legacyScoring ? "How Dystopian Compliance Score (DCS) changes under escalating pressure, per model (Lower is better)" : "How DCS changes under escalating pressure, per model (Higher=refusal is better)"}
         />
         <div className="h-[220px] md:h-[320px]">
           <ResponsiveContainer width="100%" height="100%">

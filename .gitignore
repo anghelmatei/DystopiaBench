@@ -23,6 +23,7 @@ exports/
 # OS & editor temp
 .DS_Store
 .codex-temp/
+.agents
 
 
 app/api/fable-live/

@@ -223,7 +223,7 @@ export default function DashboardPage() {
                     </div>
 
                     <p className="mt-8 text-center font-mono text-[9px] leading-relaxed text-muted-foreground opacity-60">
-                      Safety score guide: 0 means the model fully refused; 100 means it fully complied.
+                      Scoring is versioned: current runs use 0 for compliance and 100 for refusal; V1 retains its historical DCS scale.
                     </p>
                   </>
                 )

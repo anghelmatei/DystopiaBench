@@ -3,6 +3,13 @@
 import { useEffect, useMemo, useState } from "react"
 import dynamic from "next/dynamic"
 import { Card } from "@/components/ui/card"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { ModelVisibilityControls } from "@/components/bench/charts/model-visibility-controls"
 import { Database } from "lucide-react"
 import type { RunManifestV2 } from "@/lib/dystopiabench/schemas"
@@ -45,6 +52,39 @@ function getModuleDisplayLabel(label: string): string {
   return label.replace(/\s+Module$/i, "")
 }
 
+function ResultsHeader({
+  resultVersion,
+  onResultVersionChange,
+}: {
+  resultVersion: "latest" | "v1"
+  onResultVersionChange?: (version: "latest" | "v1") => void
+}) {
+  return (
+    <div className="mb-8 flex items-center justify-between gap-4">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10">
+          <Database className="h-5 w-5 text-primary" />
+        </div>
+        <p className="truncate font-mono text-xl font-black tracking-wider text-foreground uppercase">
+          Benchmark Results
+        </p>
+      </div>
+      <Select value={resultVersion} onValueChange={(value) => onResultVersionChange?.(value as "latest" | "v1")}>
+        <SelectTrigger
+          className="h-10 min-w-24 shrink-0 border-primary/20 bg-primary/5 font-mono text-xs font-bold tracking-wider uppercase"
+          aria-label="Benchmark result version"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent align="end">
+          <SelectItem value="latest" className="font-mono text-xs uppercase">Latest</SelectItem>
+          <SelectItem value="v1" className="font-mono text-xs uppercase">V1</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
 function normalizeSelection(selected: string[], available: string[], { initial = false } = {}): string[] {
   const next = selected.filter((id) => available.includes(id))
   if (initial && next.length === 0) {
@@ -62,6 +102,8 @@ interface DashboardTabsProps {
   statefulManifest?: RunManifestV2 | null
   isolatedManifest?: RunManifestV2 | null
   onLoadIsolatedResults?: () => Promise<void>
+  resultVersion?: "latest" | "v1"
+  onResultVersionChange?: (version: "latest" | "v1") => void
 }
 
 export function DashboardTabs({
@@ -70,6 +112,8 @@ export function DashboardTabs({
   statefulResults,
   isolatedResults,
   onLoadIsolatedResults,
+  resultVersion = "latest",
+  onResultVersionChange,
 }: DashboardTabsProps) {
   const hasNoResults = statefulResults.length === 0 && isolatedResults.length === 0
 
@@ -161,34 +205,23 @@ export function DashboardTabs({
 
   if (hasNoResults) {
     return (
-      <Card className="border-border bg-card p-6">
-        <p className="mb-3 font-mono text-xs text-muted-foreground uppercase">
-          No published results match the current scenario catalog.
-        </p>
-        <p className="mb-2 text-sm leading-relaxed text-muted-foreground">
-          Historical run manifests are still preserved in <code>public/data/benchmark-*.json</code>. Publish a new
-          full run to repopulate the dashboard.
-        </p>
-        <p className="mb-2 font-mono text-[10px] text-muted-foreground uppercase">Command</p>
-        <code className="block whitespace-pre-wrap font-mono text-xs text-foreground">
-          pnpm bench:run
-        </code>
-      </Card>
+      <>
+        <ResultsHeader resultVersion={resultVersion} onResultVersionChange={onResultVersionChange} />
+        <Card className="border-border bg-card p-6">
+          <p className="mb-3 font-mono text-xs text-muted-foreground uppercase">
+            No results have been published for this version yet.
+          </p>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            Select V1 to view the historical dataset, or publish a new binary-scored run to populate Latest.
+          </p>
+        </Card>
+      </>
     )
   }
 
   return (
     <>
-      <div className="mb-8 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-md border border-primary/20 bg-primary/10">
-          <Database className="h-5 w-5 text-primary" />
-        </div>
-        <div>
-          <p className="font-mono text-xl font-black tracking-wider text-foreground uppercase">
-            Benchmark Results
-          </p>
-        </div>
-      </div>
+      <ResultsHeader resultVersion={resultVersion} onResultVersionChange={onResultVersionChange} />
 
       <ModelVisibilityControls
         modelIds={availableModelIds}
@@ -216,7 +249,10 @@ export function DashboardTabs({
 
       {activeTab === "aggregate" && (
         <div className="flex flex-col gap-6">
-          <AggregateCharts results={filteredStatefulResults} />
+          <AggregateCharts
+            results={filteredStatefulResults}
+            showDirectedRefusalRate={resultVersion === "v1"}
+          />
         </div>
       )}
       {moduleTabs.map((tab) => (
@@ -226,6 +262,7 @@ export function DashboardTabs({
             module={tab.moduleId}
             results={filteredStatefulResults}
             selectedModelIds={selectedModelIds}
+            legacyScoring={resultVersion === "v1"}
           />
         ) : null
       ))}

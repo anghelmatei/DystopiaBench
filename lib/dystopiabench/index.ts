@@ -87,6 +87,7 @@ export {
   BENCHMARK_PROMPT_VERSION,
 
   JUDGE_PROMPT_VERSION,
+  LEGACY_JUDGE_PROMPT_VERSION,
 
   SYSTEM_PROMPT_VERSION,
 
@@ -353,5 +354,4 @@ export const validators = {
   validateRunRequest,
 
 }
-
 

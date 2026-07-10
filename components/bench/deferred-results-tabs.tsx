@@ -36,6 +36,24 @@ interface ResolvedRun {
   manifest: RunManifestV2 | null
 }
 
+type ResultVersion = "latest" | "v1"
+
+function isCurrentScoringRun(run: RunIndexItem): boolean {
+  const definition = run.metadata.benchmarkDefinition
+  return (
+    (run.metadata.systemPromptVersion ?? definition?.systemPromptVersion) === "v2" &&
+    (run.metadata.benchmarkPromptVersion ?? definition?.benchmarkPromptVersion) === "v2" &&
+    (run.metadata.judgePromptVersion ?? definition?.judgePromptVersion) === "v2"
+  )
+}
+
+async function loadLegacyResults(mode: "stateful" | "stateless"): Promise<BenchmarkResult[]> {
+  const response = await fetch(`/api/legacy-results/${mode}`)
+  if (!response.ok) throw new Error(`Unable to load V1 ${mode} results.`)
+  const payload = await response.json() as { results?: BenchmarkResult[] }
+  return Array.isArray(payload.results) ? payload.results : []
+}
+
 function getRunIndexVersion(run: RunIndexItem | undefined): string | undefined {
   if (!run) return undefined
   return createDashboardVersionHash([
@@ -67,10 +85,12 @@ function useBenchmarkData() {
   const statefulLatestVersionRef = useRef<string | number | undefined>(undefined)
   const statelessLatestVersionRef = useRef<string | number | undefined>(undefined)
   const isolatedLoadedRef = useRef(false)
+  const hasCurrentStatelessRunRef = useRef(false)
 
   const resolveLatestStatefulRun = useCallback(async (
     latestStatefulRunId?: string,
   ): Promise<ResolvedRun> => {
+    if (!latestStatefulRunId) return { results: [], manifest: null }
     try {
       let loaded = await loadSavedRun(undefined, {
         latestVersion: statefulLatestVersionRef.current,
@@ -104,6 +124,7 @@ function useBenchmarkData() {
   }, [])
 
   const resolveLatestIsolatedRun = useCallback(async (): Promise<ResolvedRun> => {
+    if (!hasCurrentStatelessRunRef.current) return { results: [], manifest: null }
     try {
       const loaded = await loadSavedRun(undefined, {
         latestVersion: statelessLatestVersionRef.current,
@@ -149,11 +170,13 @@ function useBenchmarkData() {
     try {
       const runIndex = await loadRuns()
       const filteredStatefulRuns = runIndex.filter((run) => {
-        return getRunConversationMode(run) === "stateful" && isDashboardDisplayCompatibleMetadata(run.metadata)
+        return getRunConversationMode(run) === "stateful" && isDashboardDisplayCompatibleMetadata(run.metadata) && isCurrentScoringRun(run)
       })
       const filteredStatelessRuns = runIndex.filter((run) => {
-        return getRunConversationMode(run) === "stateless" && isDashboardDisplayCompatibleMetadata(run.metadata)
+        return getRunConversationMode(run) === "stateless" && isDashboardDisplayCompatibleMetadata(run.metadata) && isCurrentScoringRun(run)
       })
+
+      hasCurrentStatelessRunRef.current = filteredStatelessRuns.length > 0
 
       statefulLatestVersionRef.current = getDashboardCacheVersion(filteredStatefulRuns[0])
       statelessLatestVersionRef.current = getDashboardCacheVersion(filteredStatelessRuns[0])
@@ -185,6 +208,11 @@ function useBenchmarkData() {
 }
 
 function MountedResultsTabs() {
+  const [resultVersion, setResultVersion] = useState<ResultVersion>("latest")
+  const [legacyStatefulResults, setLegacyStatefulResults] = useState<BenchmarkResult[]>([])
+  const [legacyIsolatedResults, setLegacyIsolatedResults] = useState<BenchmarkResult[]>([])
+  const [legacyLoading, setLegacyLoading] = useState(false)
+  const [legacyIsolatedLoading, setLegacyIsolatedLoading] = useState(false)
   const {
     loading,
     statefulResults,
@@ -194,15 +222,46 @@ function MountedResultsTabs() {
     isolatedLoading,
     ensureIsolatedLatestLoaded,
   } = useBenchmarkData()
+
+  const selectResultVersion = useCallback(async (version: ResultVersion) => {
+    setResultVersion(version)
+    if (version !== "v1" || legacyStatefulResults.length > 0) return
+    setLegacyLoading(true)
+    try {
+      setLegacyStatefulResults(await loadLegacyResults("stateful"))
+    } catch {
+      setResultVersion("latest")
+    } finally {
+      setLegacyLoading(false)
+    }
+  }, [legacyStatefulResults.length])
+
+  const ensureSelectedIsolatedLoaded = useCallback(async () => {
+    if (resultVersion === "latest") {
+      await ensureIsolatedLatestLoaded()
+      return
+    }
+    if (legacyIsolatedResults.length > 0 || legacyIsolatedLoading) return
+    setLegacyIsolatedLoading(true)
+    try {
+      setLegacyIsolatedResults(await loadLegacyResults("stateless"))
+    } finally {
+      setLegacyIsolatedLoading(false)
+    }
+  }, [ensureIsolatedLatestLoaded, legacyIsolatedLoading, legacyIsolatedResults.length, resultVersion])
+
+  const showingLegacy = resultVersion === "v1"
   return (
     <DashboardTabs
-      loading={loading}
-      isolatedLoading={isolatedLoading}
-      statefulResults={statefulResults}
-      isolatedResults={isolatedLatestResults}
-      statefulManifest={statefulManifest}
-      isolatedManifest={isolatedLatestManifest}
-      onLoadIsolatedResults={ensureIsolatedLatestLoaded}
+      loading={showingLegacy ? legacyLoading : loading}
+      isolatedLoading={showingLegacy ? legacyIsolatedLoading : isolatedLoading}
+      statefulResults={showingLegacy ? legacyStatefulResults : statefulResults}
+      isolatedResults={showingLegacy ? legacyIsolatedResults : isolatedLatestResults}
+      statefulManifest={showingLegacy ? null : statefulManifest}
+      isolatedManifest={showingLegacy ? null : isolatedLatestManifest}
+      onLoadIsolatedResults={ensureSelectedIsolatedLoaded}
+      resultVersion={resultVersion}
+      onResultVersionChange={(version) => void selectResultVersion(version)}
     />
   )
 }

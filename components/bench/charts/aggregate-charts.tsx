@@ -83,15 +83,15 @@ function getHeatmapHeaderHeight(labels: string[]): number {
   return needed + 14
 }
 
-function ModelBarTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: { label: string; avgScore: number; provider: string } }> }) {
+function ModelBarTooltip({ active, payload, legacyScoring }: { active?: boolean; payload?: Array<{ payload: { label: string; avgScore: number; provider: string } }>; legacyScoring: boolean }) {
   if (!active || !payload?.length) return null
   const d = payload[0].payload
   return (
     <div className="rounded-md border border-border bg-card px-3 py-2 shadow-lg">
       <p className="mb-1 font-mono text-[10px] text-muted-foreground">{d.provider}</p>
       <p className="font-mono text-xs font-bold text-foreground">{d.label}</p>
-      <p className="mt-1 font-mono text-sm font-black" style={{ color: scoreColor(d.avgScore) }}>
-        {d.avgScore} <span className="text-[10px] font-normal">{scoreLabel(d.avgScore)}</span>
+      <p className="mt-1 font-mono text-sm font-black" style={{ color: scoreColor(legacyScoring ? d.avgScore : 100 - d.avgScore) }}>
+        {d.avgScore} <span className="text-[10px] font-normal">{legacyScoring ? scoreLabel(d.avgScore) : "DCS"}</span>
       </p>
     </div>
   )
@@ -162,14 +162,16 @@ function DRFRTooltip({ active, payload }: { active?: boolean; payload?: Array<{ 
   )
 }
 
-function ModelBarChart({ data }: { data: ReturnType<typeof getAggregateByModel> }) {
+function ModelBarChart({ data, legacyScoring }: { data: ReturnType<typeof getAggregateByModel>; legacyScoring: boolean }) {
   const barLayout = getResponsiveBarChartLayout({ categoryCount: data.length })
 
   return (
     <Card className="bg-card border-border p-5">
       <SectionHeader
         label="Average Dystopian Compliance Score by Model"
-        sub="DCS - measures how willingly a model complies with harmful requests (Lower is better)"
+        sub={legacyScoring
+          ? "DCS - measures how willingly a model complies with harmful requests (Lower is better)"
+          : "DCS - measures if a model complies with harmful requests (Higher=refusal is better)"}
       />
       <div className="h-[300px] md:h-[420px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -199,7 +201,7 @@ function ModelBarChart({ data }: { data: ReturnType<typeof getAggregateByModel> 
               tickLine={false}
               width={28}
             />
-            <Tooltip content={<ModelBarTooltip />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }} />
+            <Tooltip content={<ModelBarTooltip legacyScoring={legacyScoring} />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }} />
             <Bar dataKey="avgScore" radius={[3, 3, 0, 0]} maxBarSize={barLayout.maxBarSize}>
               {data.map((entry) => (
                 <Cell key={entry.modelId} fill={MODEL_COLORS[entry.modelId] ?? "#888"} />
@@ -265,18 +267,22 @@ function DRFRChart({ data }: { data: ReturnType<typeof getDRFRByModel> }) {
 function EscalationCurveChart({
   data,
   title = "Escalation Curve - All Models",
-  sub = "How each model's Dystopian Compliance Score (DCS) changes as pressure escalates from L1 to L5 (Lower is better)",
+  sub,
+  legacyScoring,
 }: {
   data: ReturnType<typeof getEscalationCurveByModel>
   title?: string
   sub?: string
+  legacyScoring: boolean
 }) {
   const modelIds = data.length > 0 ? Object.keys(data[0]).filter((key) => key !== "level") : []
   return (
     <Card className="bg-card border-border p-5">
       <SectionHeader
         label={title}
-        sub={sub}
+        sub={sub ?? (legacyScoring
+          ? "How each model's Dystopian Compliance Score (DCS) changes as pressure escalates from L1 to L5 (Lower is better)"
+          : "How each model's average DCS changes as pressure escalates from L1 to L5 (Higher=refusal is better)")}
       />
       <div className="h-[220px] md:h-[360px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -353,9 +359,11 @@ function AggregateEscalationTooltip({
 function ModuleAggregateEscalationCard({
   label,
   data,
+  legacyScoring,
 }: {
   label: string
   data: ReturnType<typeof getEscalationCurve>
+  legacyScoring: boolean
 }) {
   const aggregateLineColor = "hsl(var(--destructive))"
 
@@ -363,7 +371,9 @@ function ModuleAggregateEscalationCard({
     <Card className="bg-card border-border p-5">
       <SectionHeader
         label={`${label} Escalation Curve`}
-        sub={`Aggregate DCS across all models from L1 to L5 within ${label} (Lower is better)`}
+        sub={legacyScoring
+          ? `Aggregate DCS across all models from L1 to L5 within ${label} (Lower is better)`
+          : `Average DCS across all models from L1 to L5 within ${label} (Higher=refusal is better)`}
       />
       <div className="h-[180px] md:h-[220px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -406,7 +416,7 @@ function ModuleAggregateEscalationCard({
   )
 }
 
-function ModuleEscalationCurves({ results }: { results: BenchmarkResult[] }) {
+function ModuleEscalationCurves({ results, legacyScoring }: { results: BenchmarkResult[]; legacyScoring: boolean }) {
   const moduleEntries = orderScenarioModulesForDisplay(ALL_MODULES).map((module) => ({
     id: module.id,
     label: getModuleDisplayLabel(module.label),
@@ -421,6 +431,7 @@ function ModuleEscalationCurves({ results }: { results: BenchmarkResult[] }) {
             key={String(module.id)}
             label={module.label}
             data={module.data}
+            legacyScoring={legacyScoring}
           />
         ))}
       </div>
@@ -428,7 +439,7 @@ function ModuleEscalationCurves({ results }: { results: BenchmarkResult[] }) {
   )
 }
 
-function ModuleComparisonChart({ results }: { results: BenchmarkResult[] }) {
+function ModuleComparisonChart({ results, legacyScoring }: { results: BenchmarkResult[]; legacyScoring: boolean }) {
   const [breakdownMode, setBreakdownMode] = useState<"module" | "category">("module")
   const [sortKey, setSortKey] = useState<string>("avg")
   const moduleEntries = useMemo(
@@ -529,7 +540,9 @@ function ModuleComparisonChart({ results }: { results: BenchmarkResult[] }) {
 
   const getCellTitle = (modelLabel: string, moduleLabel: string, score: number | null) => {
     if (score == null) return `${modelLabel} | ${moduleLabel}: no data`
-    return `${modelLabel} | ${moduleLabel}: ${score} DCS (lower is better)`
+    return legacyScoring
+      ? `${modelLabel} | ${moduleLabel}: ${score} DCS (lower is better)`
+      : `${modelLabel} | ${moduleLabel}: ${score} DCS (higher=refusal is better)`
   }
 
   const heatmapColumnWidth =
@@ -570,7 +583,7 @@ function ModuleComparisonChart({ results }: { results: BenchmarkResult[] }) {
           options.overall ? "border-l border-border/80" : ""
         }`}
         style={{
-          background: moduleHeatmapColor(score),
+          background: moduleHeatmapColor(legacyScoring ? score : 100 - score),
           color: moduleHeatmapTextColor(),
           boxShadow: "inset 0 0 0 1px rgb(255 255 255 / 0.07)",
         }}
@@ -586,7 +599,9 @@ function ModuleComparisonChart({ results }: { results: BenchmarkResult[] }) {
       <Card className="bg-card border-border p-5">
         <SectionHeader
           label="Module Breakdown by Model"
-          sub="Average Dystopian Compliance Score (DCS) per module per model (Lower is better)"
+          sub={legacyScoring
+            ? "Average Dystopian Compliance Score (DCS) per module per model (Lower is better)"
+            : "Average DCS per module per model (Higher=refusal is better; worst left, best right)"}
         />
         <div className="mt-0">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -632,7 +647,7 @@ function ModuleComparisonChart({ results }: { results: BenchmarkResult[] }) {
                                 style={{
                                   width: `${width}%`,
                                   minWidth: "1.75rem",
-                                  background: moduleHeatmapColor(score),
+                                  background: moduleHeatmapColor(legacyScoring ? score : 100 - score),
                                   color: moduleHeatmapTextColor(),
                                 }}
                               >
@@ -655,7 +670,9 @@ function ModuleComparisonChart({ results }: { results: BenchmarkResult[] }) {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <SectionHeader
             label="Aggregate Score Heatmap"
-            sub={`Average Dystopian Compliance Score (DCS) by model and ${breakdownMode}, sorted safest to least safe by default`}
+            sub={legacyScoring
+              ? `Average Dystopian Compliance Score (DCS) by model and ${breakdownMode}, sorted safest to least safe by default`
+              : `Average DCS by model and ${breakdownMode}, sorted worst to best by default`}
           />
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-[10px] text-muted-foreground">Columns</span>
@@ -795,7 +812,7 @@ function ModuleComparisonChart({ results }: { results: BenchmarkResult[] }) {
   )
 }
 
-function ModelRadarChart({ results }: { results: BenchmarkResult[] }) {
+function ModelRadarChart({ results, legacyScoring }: { results: BenchmarkResult[]; legacyScoring: boolean }) {
   const modelIds = [...new Set(results.map((result) => result.modelId))]
   const data = [1, 2, 3, 4, 5].map((level) => {
     const row: Record<string, string | number> = { level: `L${level}\n${LEVEL_LABELS[level]}` }
@@ -810,7 +827,11 @@ function ModelRadarChart({ results }: { results: BenchmarkResult[] }) {
     <Card className="bg-card border-border px-5 pb-4 pt-4">
       <div className="mb-1">
         <p className="font-mono text-xs font-bold tracking-wider text-foreground uppercase">Escalation Radar - All Models</p>
-        <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">Dystopian Compliance Score (DCS) by escalation pressure level (Lower is better)</p>
+        <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+          {legacyScoring
+            ? "Dystopian Compliance Score (DCS) by escalation pressure level (Lower is better)"
+            : "DCS by escalation pressure level (Higher=refusal is better)"}
+        </p>
       </div>
       <div className="-mb-10 -mt-4 h-[360px] md:-mb-14 md:-mt-5 md:h-[560px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -862,9 +883,11 @@ function ModelRadarChart({ results }: { results: BenchmarkResult[] }) {
 
 interface AggregateChartsProps {
   results: BenchmarkResult[]
+  showDirectedRefusalRate?: boolean
 }
 
-export function AggregateCharts({ results }: AggregateChartsProps) {
+export function AggregateCharts({ results, showDirectedRefusalRate = false }: AggregateChartsProps) {
+  const legacyScoring = showDirectedRefusalRate
   const resultsIndex = useMemo(() => createResultsIndex(results), [results])
   const modelData = useMemo(() => getAggregateByModel(results, resultsIndex), [results, resultsIndex])
   const escalation = useMemo(() => getEscalationCurveByModel(results, resultsIndex), [results, resultsIndex])
@@ -873,16 +896,16 @@ export function AggregateCharts({ results }: AggregateChartsProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid gap-6 lg:grid-cols-2">
-        <ModelBarChart data={modelData} />
-        <DRFRChart data={drfrData} />
+      <div className={`grid gap-6 ${showDirectedRefusalRate ? "lg:grid-cols-2" : ""}`}>
+        <ModelBarChart data={modelData} legacyScoring={legacyScoring} />
+        {showDirectedRefusalRate ? <DRFRChart data={drfrData} /> : null}
       </div>
 
-      <ModuleComparisonChart results={results} />
+      <ModuleComparisonChart results={results} legacyScoring={legacyScoring} />
 
-      <EscalationCurveChart data={escalation} />
-      <ModuleEscalationCurves results={results} />
-      {shape.modelCount >= 3 ? <ModelRadarChart results={results} /> : null}
+      <EscalationCurveChart data={escalation} legacyScoring={legacyScoring} />
+      <ModuleEscalationCurves results={results} legacyScoring={legacyScoring} />
+      {shape.modelCount >= 3 ? <ModelRadarChart results={results} legacyScoring={legacyScoring} /> : null}
     </div>
   )
 }
