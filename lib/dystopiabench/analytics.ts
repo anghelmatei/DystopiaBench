@@ -2,12 +2,10 @@ import type { Module, ComplianceRating, BenchmarkResult } from "./types"
 
 export interface ResultsIndex {
   byModel: Map<string, BenchmarkResult[]>
-  byLocale: Map<string, BenchmarkResult[]>
   byScenario: Map<string, BenchmarkResult[]>
   byScenarioLevel: Map<string, BenchmarkResult[]>
   byScenarioModelLevel: Map<string, BenchmarkResult>
   modelIds: string[]
-  localeIds: string[]
   scenarioIds: string[]
 }
 
@@ -29,7 +27,6 @@ function scenarioModelLevelKey(scenarioId: string, modelId: string, level: numbe
 
 export function createResultsIndex(results: BenchmarkResult[]): ResultsIndex {
   const byModel = new Map<string, BenchmarkResult[]>()
-  const byLocale = new Map<string, BenchmarkResult[]>()
   const byScenario = new Map<string, BenchmarkResult[]>()
   const byScenarioLevel = new Map<string, BenchmarkResult[]>()
   const byScenarioModelLevel = new Map<string, BenchmarkResult>()
@@ -40,14 +37,6 @@ export function createResultsIndex(results: BenchmarkResult[]): ResultsIndex {
       modelRows.push(result)
     } else {
       byModel.set(result.modelId, [result])
-    }
-
-    const locale = result.promptLocale ?? "en"
-    const localeRows = byLocale.get(locale)
-    if (localeRows) {
-      localeRows.push(result)
-    } else {
-      byLocale.set(locale, [result])
     }
 
     const scenarioRows = byScenario.get(result.scenarioId)
@@ -72,12 +61,10 @@ export function createResultsIndex(results: BenchmarkResult[]): ResultsIndex {
 
   return {
     byModel,
-    byLocale,
     byScenario,
     byScenarioLevel,
     byScenarioModelLevel,
     modelIds: [...byModel.keys()],
-    localeIds: [...byLocale.keys()],
     scenarioIds: [...byScenario.keys()],
   }
 }
@@ -88,20 +75,17 @@ function getResultsIndex(results: BenchmarkResult[], index?: ResultsIndex): Resu
 
 export function getChartShape(results: BenchmarkResult[]) {
   const modelIds = new Set<string>()
-  const localeIds = new Set<string>()
   const scenarioIds = new Set<string>()
   const modules = new Set<Module>()
 
   for (const result of results) {
     modelIds.add(result.modelId)
-    localeIds.add(result.promptLocale ?? "en")
     scenarioIds.add(result.scenarioId)
     modules.add(result.module)
   }
 
   return {
     modelCount: modelIds.size,
-    localeCount: localeIds.size,
     scenarioCount: scenarioIds.size,
     moduleCount: modules.size,
     hasSingleModel: modelIds.size === 1,
@@ -172,44 +156,6 @@ export function getAggregateByModule(results: BenchmarkResult[]) {
     avgScore: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
     totalTests: scores.length,
   }))
-}
-
-export function getAvailablePromptLocales(results: BenchmarkResult[]): string[] {
-  return [...new Set(results.map((result) => result.promptLocale ?? "en"))].sort((left, right) =>
-    left.localeCompare(right),
-  )
-}
-
-export function getAggregateByLocale(results: BenchmarkResult[], resultsIndex?: ResultsIndex) {
-  const index = getResultsIndex(results, resultsIndex)
-  return Array.from(index.byLocale.entries())
-    .map(([locale, rows]) => ({
-      locale,
-      avgScore: Math.round(rows.reduce((sum, row) => sum + row.score, 0) / rows.length),
-      drfr: Math.round((rows.reduce((sum, row) => sum + getRowRefusalRate(row), 0) / rows.length) * 100),
-      totalTests: rows.length,
-      modelCount: new Set(rows.map((row) => row.modelId)).size,
-      scenarioCount: new Set(rows.map((row) => row.canonicalScenarioId ?? row.scenarioId)).size,
-    }))
-    .sort((a, b) => a.avgScore - b.avgScore || a.locale.localeCompare(b.locale))
-}
-
-export function getLocaleModuleMatrix(results: BenchmarkResult[]) {
-  const locales = getAvailablePromptLocales(results)
-  const groupingKeys = [...new Set(results.map((row) => row.module))]
-
-  return locales.map((locale) => {
-    const localeRows = results.filter((row) => (row.promptLocale ?? "en") === locale)
-    const row: Record<string, string | number> = { locale }
-    for (const groupingKey of groupingKeys) {
-      const groupedRows = localeRows.filter((candidate) => candidate.module === groupingKey)
-      row[String(groupingKey)] =
-        groupedRows.length > 0
-          ? Math.round(groupedRows.reduce((sum, candidate) => sum + candidate.score, 0) / groupedRows.length)
-          : 0
-    }
-    return row
-  })
 }
 
 export function getEscalationCurveByModel(results: BenchmarkResult[], resultsIndex?: ResultsIndex) {

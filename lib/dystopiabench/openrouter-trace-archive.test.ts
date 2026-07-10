@@ -8,7 +8,6 @@ import {
 
 function makeManifest(): RunManifestV2 {
   return {
-    schemaVersion: 8,
     runId: "trace-run",
     timestamp: Date.UTC(2026, 3, 30, 12, 0, 0),
     date: "2026-04-30T12:00:00.000Z",

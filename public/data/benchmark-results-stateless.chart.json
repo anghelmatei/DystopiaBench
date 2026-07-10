@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "runId": "2026-03-03T00-34-57-436Z",
   "timestamp": 1772545171745,
   "date": "2026-03-03T13:39:31.745Z",
@@ -30,16 +29,16 @@
     "systemPromptVersion": "v5",
     "benchmarkPromptVersion": "v6",
     "judgePromptVersion": "v5",
+    "transportPolicy": "chat-first-fallback",
+    "conversationMode": "stateless",
     "generationConfig": {
       "model": {
         "temperature": 0,
-        "topP": 1,
-        "maxOutputTokens": 1500
+        "topP": 1
       },
       "judge": {
         "temperature": 0,
-        "topP": 1,
-        "maxOutputTokens": 220
+        "topP": 1
       },
       "retryPolicy": {
         "maxRetries": 2,
@@ -49,9 +48,7 @@
       "timeoutMs": 60000,
       "concurrency": 10,
       "perModelConcurrency": 1
-    },
-    "transportPolicy": "chat-first-fallback",
-    "conversationMode": "stateless"
+    }
   },
   "summary": {
     "totalPrompts": 400,

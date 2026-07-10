@@ -20,7 +20,7 @@ import {
   runBenchmark,
   summarizeResults,
 } from "./runner"
-import { runManifestV2Schema } from "./schemas"
+import { GENERATION_CONFIG, runManifestV2Schema } from "./schemas"
 import { toModuleId, type ScenarioModule } from "./types"
 
 process.env.OPENROUTER_API_KEY ??= "test-openrouter-key"
@@ -247,6 +247,22 @@ test("resolveJudgeModels handles openrouter selectors", () => {
   assert.deepEqual(result, ["openrouter:openai/gpt-4o"])
 })
 
+test("resolveJudgeModels handles LiteLLM selectors", () => {
+  const input = ["litellm:claude-fable-5"]
+  const result = resolveJudgeModels(input)
+  assert.deepEqual(result, ["litellm:claude-fable-5"])
+})
+
+test("parseModelIdentifier handles LiteLLM selectors", () => {
+  const parsed = parseModelIdentifier("litellm:claude-fable-5")
+  assert.equal(parsed.id, "litellm:claude-fable-5")
+  assert.equal(parsed.label, "LiteLLM claude-fable-5")
+  assert.equal(parsed.provider, "LiteLLM")
+  assert.equal(parsed.modelString, "claude-fable-5")
+  assert.equal(parsed.backend, "litellm")
+  assert.equal(parsed.weightClass, "unknown")
+})
+
 test("parseModelIdentifier surfaces weightClass for curated repo models", () => {
   assert.equal(parseModelIdentifier("deepseek-v3.2").weightClass, "open_weight")
   assert.equal(parseModelIdentifier("gpt-5.3-codex").weightClass, "closed")
@@ -346,6 +362,228 @@ test("aggregateJudgeVotes uses score-based tie breaking across split judge votes
   assert.equal(result.score, 33)
 })
 
+test("runBenchmark calls LiteLLM selectors through the OpenAI-compatible chat path", async () => {
+  const originalFetch = globalThis.fetch
+  const originalLiteLLMApiKey = process.env.LITELLM_API_KEY
+  const originalLiteLLMBaseUrl = process.env.LITELLM_BASE_URL
+  const seenModels: string[] = []
+  const seenUrls: string[] = []
+  const seenBodies: Array<Record<string, unknown>> = []
+
+  process.env.LITELLM_API_KEY = "test-litellm-key"
+  process.env.LITELLM_BASE_URL = "https://litellm.test/"
+
+  globalThis.fetch = (async (input, init) => {
+    const body = await readJsonRequestBody(input, init) as Record<string, unknown> & { model?: string }
+    const model = body.model ?? "unknown"
+    seenModels.push(model)
+    seenUrls.push(input instanceof Request ? input.url : String(input))
+    seenBodies.push(body)
+
+    if (model === "claude-fable-5") {
+      return chatCompletionResponse("anthropic/claude-opus-4.6", "model response from litellm")
+    }
+
+    return chatCompletionResponse(
+      model,
+      JSON.stringify({ compliance: "refusal", reasoning: "LiteLLM fixture judge." }),
+    )
+  }) as typeof fetch
+
+  try {
+    const manifest = await runBenchmark({
+      runId: "litellm-chat-path-test",
+      module: "scheduler-test",
+      modelIds: ["litellm:claude-fable-5"],
+      levels: [1],
+      judgeModel: "litellm:judge-model",
+      transportPolicy: "chat-first-fallback",
+      conversationMode: "stateful",
+      scheduler: "level-wave",
+      scenarioModules: [{
+        ...createSchedulerTestModule(),
+        scenarios: [createSchedulerTestModule().scenarios[0]],
+      }],
+      skipModelValidation: true,
+      replicates: 1,
+      concurrency: 1,
+      perModelConcurrency: 1,
+      maxRetries: 0,
+    })
+
+    assert.deepEqual(seenModels, ["claude-fable-5", "judge-model"])
+    assert.ok(seenUrls.every((url) => url.startsWith("https://litellm.test/v1/")))
+    assert.equal(seenBodies[0]?.temperature, undefined)
+    assert.equal(seenBodies[0]?.top_p, undefined)
+    assert.equal(seenBodies[1]?.temperature, GENERATION_CONFIG.judge.temperature)
+    assert.equal(seenBodies[1]?.top_p, GENERATION_CONFIG.judge.topP)
+    assert.equal(manifest.results.length, 1)
+    assert.equal(manifest.results[0]?.endpointUsed, "litellm_chat")
+    assert.equal(
+      (manifest.results[0]?.providerMetadata?.litellm as Record<string, unknown> | undefined)?.responseModelId,
+      "anthropic/claude-opus-4.6",
+    )
+    assert.equal(manifest.results[0]?.status, "ok")
+    assert.equal(manifest.metadata.judgeModels?.[0], "litellm:judge-model")
+  } finally {
+    globalThis.fetch = originalFetch
+    if (originalLiteLLMApiKey === undefined) {
+      delete process.env.LITELLM_API_KEY
+    } else {
+      process.env.LITELLM_API_KEY = originalLiteLLMApiKey
+    }
+    if (originalLiteLLMBaseUrl === undefined) {
+      delete process.env.LITELLM_BASE_URL
+    } else {
+      process.env.LITELLM_BASE_URL = originalLiteLLMBaseUrl
+    }
+  }
+})
+
+test("runBenchmark can omit model system prompts while preserving scenario context", async () => {
+  const originalFetch = globalThis.fetch
+  const originalLiteLLMApiKey = process.env.LITELLM_API_KEY
+  const originalLiteLLMBaseUrl = process.env.LITELLM_BASE_URL
+  const seenBodies: Array<Record<string, unknown> & { model?: string; messages?: Array<{ role: string; content: string }> }> = []
+
+  process.env.LITELLM_API_KEY = "test-litellm-key"
+  process.env.LITELLM_BASE_URL = "https://litellm.test/"
+
+  globalThis.fetch = (async (input, init) => {
+    const body = await readJsonRequestBody(input, init) as Record<string, unknown> & {
+      model?: string
+      messages?: Array<{ role: string; content: string }>
+    }
+    seenBodies.push(body)
+
+    if (body.model === "claude-fable-5") {
+      return chatCompletionResponse("claude-fable-5", "model response from litellm")
+    }
+
+    return chatCompletionResponse(
+      body.model ?? "judge",
+      JSON.stringify({ compliance: "refusal", reasoning: "LiteLLM fixture judge." }),
+    )
+  }) as typeof fetch
+
+  try {
+    const scenarioModule = createSchedulerTestModule()
+    const manifest = await runBenchmark({
+      runId: "litellm-no-model-system-prompt-test",
+      module: "scheduler-test",
+      modelIds: ["litellm:claude-fable-5"],
+      levels: [1],
+      judgeModel: "litellm:judge-model",
+      transportPolicy: "chat-only",
+      conversationMode: "stateful",
+      scheduler: "level-wave",
+      modelSystemPromptMode: "none",
+      scenarioModules: [{
+        ...scenarioModule,
+        scenarios: [{
+          ...scenarioModule.scenarios[0],
+          systemContext: "Scenario context fixture.",
+        }],
+      }],
+      skipModelValidation: true,
+      replicates: 1,
+      concurrency: 1,
+      perModelConcurrency: 1,
+      maxRetries: 0,
+    })
+
+    const modelMessages = seenBodies[0]?.messages ?? []
+    assert.deepEqual(modelMessages.map((message) => message.role), ["user"])
+    assert.match(modelMessages[0]?.content ?? "", /Project context:\nScenario context fixture\./)
+    assert.match(modelMessages[0]?.content ?? "", /A-L1/)
+    assert.doesNotMatch(modelMessages[0]?.content ?? "", /Meridian Systems/)
+    assert.equal(manifest.metadata.modelSystemPromptMode, "none")
+    assert.equal(manifest.metadata.executionConfig?.modelSystemPromptMode, "none")
+    assert.equal(manifest.metadata.systemPromptVersion, "none")
+    assert.equal(manifest.metadata.benchmarkDefinition?.systemPromptVersion, "none")
+    assert.equal(manifest.metadata.systemPromptOverrideUsed, true)
+    assert.equal(manifest.results[0]?.status, "ok")
+  } finally {
+    globalThis.fetch = originalFetch
+    if (originalLiteLLMApiKey === undefined) {
+      delete process.env.LITELLM_API_KEY
+    } else {
+      process.env.LITELLM_API_KEY = originalLiteLLMApiKey
+    }
+    if (originalLiteLLMBaseUrl === undefined) {
+      delete process.env.LITELLM_BASE_URL
+    } else {
+      process.env.LITELLM_BASE_URL = originalLiteLLMBaseUrl
+    }
+  }
+})
+
+test("runBenchmark omits LiteLLM sampling params for Anthropic-backed judges", async () => {
+  const originalFetch = globalThis.fetch
+  const originalLiteLLMApiKey = process.env.LITELLM_API_KEY
+  const originalLiteLLMBaseUrl = process.env.LITELLM_BASE_URL
+  const seenBodies: Array<Record<string, unknown> & { model?: string }> = []
+
+  process.env.LITELLM_API_KEY = "test-litellm-key"
+  process.env.LITELLM_BASE_URL = "https://litellm.test/"
+
+  globalThis.fetch = (async (input, init) => {
+    const body = await readJsonRequestBody(input, init) as Record<string, unknown> & { model?: string }
+    seenBodies.push(body)
+
+    if (body.model === "test-model") {
+      return chatCompletionResponse("test-model", "model response from litellm")
+    }
+
+    return chatCompletionResponse(
+      body.model ?? "judge",
+      JSON.stringify({ compliance: "refusal", reasoning: "LiteLLM fixture judge." }),
+    )
+  }) as typeof fetch
+
+  try {
+    const manifest = await runBenchmark({
+      runId: "litellm-anthropic-judge-params-test",
+      module: "scheduler-test",
+      modelIds: ["litellm:test-model"],
+      levels: [1],
+      judgeModel: "litellm:claude-haiku-4-5",
+      transportPolicy: "chat-first-fallback",
+      conversationMode: "stateful",
+      scheduler: "level-wave",
+      scenarioModules: [{
+        ...createSchedulerTestModule(),
+        scenarios: [createSchedulerTestModule().scenarios[0]],
+      }],
+      skipModelValidation: true,
+      replicates: 1,
+      concurrency: 1,
+      perModelConcurrency: 1,
+      maxRetries: 0,
+    })
+
+    assert.equal(manifest.results[0]?.status, "ok")
+    assert.equal(seenBodies[0]?.model, "test-model")
+    assert.equal(seenBodies[0]?.temperature, GENERATION_CONFIG.model.temperature)
+    assert.equal(seenBodies[0]?.top_p, GENERATION_CONFIG.model.topP)
+    assert.equal(seenBodies[1]?.model, "claude-haiku-4-5")
+    assert.equal(seenBodies[1]?.temperature, undefined)
+    assert.equal(seenBodies[1]?.top_p, undefined)
+  } finally {
+    globalThis.fetch = originalFetch
+    if (originalLiteLLMApiKey === undefined) {
+      delete process.env.LITELLM_API_KEY
+    } else {
+      process.env.LITELLM_API_KEY = originalLiteLLMApiKey
+    }
+    if (originalLiteLLMBaseUrl === undefined) {
+      delete process.env.LITELLM_BASE_URL
+    } else {
+      process.env.LITELLM_BASE_URL = originalLiteLLMBaseUrl
+    }
+  }
+})
+
 test("runBenchmark level-wave schedules all L1 rows before L2 and preserves stateful history", async () => {
   const originalFetch = globalThis.fetch
   const modelCalls: Array<{ prompt: string; assistantHistory: string[] }> = []
@@ -397,6 +635,57 @@ test("runBenchmark level-wave schedules all L1 rows before L2 and preserves stat
     assert.deepEqual(modelCalls.map((call) => call.prompt), ["A-L1", "B-L1", "A-L2", "B-L2"])
     assert.deepEqual(modelCalls[2]?.assistantHistory, ["response:A-L1"])
     assert.deepEqual(modelCalls[3]?.assistantHistory, ["response:B-L1"])
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test("runBenchmark treats module all as every registered scenario module", async () => {
+  const originalFetch = globalThis.fetch
+  const modelPrompts: string[] = []
+
+  globalThis.fetch = (async (input, init) => {
+    const body = await readJsonRequestBody(input, init) as {
+      model?: string
+      messages?: Array<{ role: string; content: string }>
+      max_tokens?: number
+    }
+    const lastUser = [...(body.messages ?? [])].reverse().find((message) => message.role === "user")?.content ?? ""
+
+    if (isFixtureModel(body.model)) {
+      assert.equal(body.max_tokens, undefined)
+      modelPrompts.push(lastUser)
+      return chatCompletionResponse(body.model ?? "model", `response:${lastUser}`)
+    }
+
+    return chatCompletionResponse(
+      body.model ?? "judge",
+      JSON.stringify({ compliance: "refusal", reasoning: "Fixture judge." }),
+    )
+  }) as typeof fetch
+
+  try {
+    const manifest = await runBenchmark({
+      runId: "module-all-selector-test",
+      module: "all",
+      modelIds: ["gpt-5.3-codex"],
+      levels: [1],
+      judgeModel: "gpt-5.4-mini",
+      judgeStrategy: "single",
+      transportPolicy: "chat-only",
+      conversationMode: "stateful",
+      scheduler: "level-wave",
+      scenarioModules: [createSchedulerTestModule()],
+      skipModelValidation: true,
+      replicates: 1,
+      concurrency: 10,
+      perModelConcurrency: 10,
+      maxRetries: 0,
+    })
+
+    assert.deepEqual(modelPrompts, ["A-L1", "B-L1"])
+    assert.equal(manifest.metadata.module, "all")
+    assert.equal(manifest.results.length, 2)
   } finally {
     globalThis.fetch = originalFetch
   }
@@ -464,7 +753,7 @@ test("runBenchmark skips downstream stateful levels after a chain-breaking model
   }
 })
 
-test("runBenchmark records repeated SDK empty responses without direct chat fallback", async () => {
+test("runBenchmark marks repeated empty stop responses invalid without direct chat fallback", async () => {
   const originalFetch = globalThis.fetch
   let modelCalls = 0
 
@@ -509,11 +798,15 @@ test("runBenchmark records repeated SDK empty responses without direct chat fall
     assert.equal(modelCalls, 4)
     assert.equal(manifest.results.length, 2)
     assert.ok(manifest.results.every((row) => row.errorCode === "EMPTY_MODEL_RESPONSE"))
-    assert.ok(manifest.results.every((row) => row.status === "ok"))
-    assert.ok(manifest.results.every((row) => row.compliance === "refusal"))
-    assert.ok(manifest.results.every((row) => row.scoreabilityReason === "EMPTY_SILENT_REFUSAL"))
+    assert.ok(manifest.results.every((row) => row.status === "invalid_response"))
+    assert.ok(manifest.results.every((row) => row.compliance === undefined))
+    assert.ok(manifest.results.every((row) => row.score === null))
+    assert.ok(manifest.results.every((row) => row.scorable === false))
+    assert.ok(manifest.results.every((row) => row.scoreabilityReason === "EMPTY_UNVERIFIED_RESPONSE"))
     assert.ok(manifest.results.every((row) => row.endpointUsed === "ai_sdk_chat"))
     assert.ok(manifest.results.every((row) => row.transportAttempts === 2))
+    assert.equal(manifest.summary.scoredPrompts, 0)
+    assert.equal(manifest.summary.integrity?.verdict, "fail")
   } finally {
     globalThis.fetch = originalFetch
   }
@@ -572,6 +865,75 @@ test("runBenchmark marks generated empty completions invalid instead of refusal"
     assert.equal(manifest.results[0]?.scoreabilityReason, "EMPTY_GENERATED_COMPLETION")
     assert.equal(manifest.results[0]?.score, null)
     assert.equal(manifest.results[0]?.compliance, undefined)
+    assert.equal(manifest.summary.scoredPrompts, 0)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test("runBenchmark marks likely truncated non-empty responses invalid before judging", async () => {
+  const originalFetch = globalThis.fetch
+  let modelCalls = 0
+  let judgeCalls = 0
+  const incompleteResponse =
+    "This design keeps operators in control and describes monitoring, alerting, and review steps. " +
+    "The response continues into a fail-safe requirement where degraded sensors, classifier uncertainty, and operator controls must"
+
+  globalThis.fetch = (async (input, init) => {
+    const body = await readJsonRequestBody(input, init) as {
+      model?: string
+      max_tokens?: number
+    }
+
+    if (isFixtureModel(body.model)) {
+      assert.equal(body.max_tokens, undefined)
+      modelCalls += 1
+      return chatCompletionResponse(body.model ?? "model", incompleteResponse, {
+        finishReason: "stop",
+        completionTokens: 720,
+      })
+    }
+
+    judgeCalls += 1
+    return chatCompletionResponse(
+      body.model ?? "judge",
+      JSON.stringify({ compliance: "refusal", reasoning: "Fixture judge." }),
+    )
+  }) as typeof fetch
+
+  try {
+    const manifest = await runBenchmark({
+      runId: "incomplete-response-invalid-test",
+      module: "scheduler-test",
+      modelIds: ["gpt-5.3-codex"],
+      levels: [1],
+      judgeModel: "gpt-5.4-mini",
+      transportPolicy: "chat-first-fallback",
+      conversationMode: "stateful",
+      scheduler: "level-wave",
+      scenarioModules: [{
+        ...createSchedulerTestModule(),
+        scenarios: [createSchedulerTestModule().scenarios[0]],
+      }],
+      skipModelValidation: true,
+      replicates: 1,
+      concurrency: 1,
+      perModelConcurrency: 1,
+      maxRetries: 0,
+      retryBackoffBaseMs: 1,
+      retryBackoffJitterMs: 0,
+    })
+
+    assert.equal(modelCalls, 2)
+    assert.equal(judgeCalls, 0)
+    assert.equal(manifest.results.length, 1)
+    assert.equal(manifest.results[0]?.status, "invalid_response")
+    assert.equal(manifest.results[0]?.errorCode, "INCOMPLETE_MODEL_RESPONSE")
+    assert.equal(manifest.results[0]?.scoreabilityReason, "INCOMPLETE_RESPONSE")
+    assert.equal(manifest.results[0]?.score, null)
+    assert.equal(manifest.results[0]?.compliance, undefined)
+    assert.equal(manifest.results[0]?.scorable, false)
+    assert.equal(manifest.results[0]?.judgeVotes, undefined)
     assert.equal(manifest.summary.scoredPrompts, 0)
   } finally {
     globalThis.fetch = originalFetch
@@ -955,9 +1317,8 @@ test("runBenchmark rejects pair-with-tiebreak panels with duplicate judges", asy
   )
 })
 
-test("runManifestV2Schema accepts schemaVersion 4 manifests with new metadata", () => {
+test("runManifestV2Schema accepts derived rerun metadata", () => {
   const parsed = runManifestV2Schema.safeParse({
-    schemaVersion: 4,
     runId: "rerun-2026-03-23T10-00-00-000Z",
     timestamp: 1,
     date: "2026-03-23T10:00:00.000Z",
@@ -1095,7 +1456,7 @@ test("summarizeResults includes risk slices and auxiliary label coverage", () =>
   assert.equal(summary.auxiliaryLabelCoverage?.harmAwarenessRate, 100)
 })
 
-test("summarizeResults includes implicit empty refusals in reliability-adjusted scores", () => {
+test("summarizeResults keeps legacy implicit empty refusals scored but fails integrity", () => {
   const summary = summarizeResults([
     {
       scenarioId: "scenario-1",
@@ -1136,5 +1497,9 @@ test("summarizeResults includes implicit empty refusals in reliability-adjusted 
     },
   ])
 
+  // Legacy rows with implicitRefusalFromEmpty keep their recorded score so
+  // re-summarizing published manifests does not shift historical numbers; new
+  // runs never produce such rows (they are marked unscoreable at the runner).
   assert.equal(summary.riskSlices?.reliabilityAdjustedAverageDcs, 17)
+  assert.equal(summary.integrity?.verdict, "fail")
 })

@@ -35,18 +35,17 @@ export const traceCaptureSourceSchema = z.enum([
 export const scoreabilityReasonSchema = z.enum([
   "EMPTY_GENERATED_COMPLETION",
   "EMPTY_SILENT_REFUSAL",
+  "EMPTY_UNVERIFIED_RESPONSE",
+  "INCOMPLETE_RESPONSE",
   "PROVIDER_CONTENT_FILTER",
 ])
 export const adjudicationSourceSchema = z.enum([
   "single-judge",
   "judge-panel",
-  "human-review",
-  "gold-set",
-  "imported-review",
 ])
 export const artifactVisibilitySchema = z.enum(["public", "private"])
-export const endpointUsedSchema = z.enum(["ai_sdk_chat", "openrouter_chat_primary", "openrouter_chat_fallback", "local_chat"])
-export const localeTagSchema = z.string().trim().min(2)
+export const endpointUsedSchema = z.enum(["ai_sdk_chat", "openrouter_chat_primary", "openrouter_chat_fallback", "local_chat", "litellm_chat"])
+export const modelSystemPromptModeSchema = z.enum(["standard", "none"])
 
 export const GENERATION_CONFIG = {
   model: {
@@ -62,23 +61,17 @@ export const GENERATION_CONFIG = {
     backoffBaseMs: 1000,
     backoffJitterMs: 1000,
   },
-  timeoutMs: 600_000,
+  timeoutMs: 900_000,
 } as const
 
 const generationModelConfigSchema = z.object({
   temperature: z.number(),
   topP: z.number().min(0).max(1).optional(),
-  // Deprecated: accepted for historical manifests, but not written by new runs.
-  maxOutputTokens: z.number().int().positive().optional(),
 })
 
 const generationJudgeConfigSchema = z.object({
   temperature: z.number(),
   topP: z.number().min(0).max(1).optional(),
-  // Deprecated: accepted for historical manifests, but not written by new runs.
-  maxTokens: z.number().int().positive().optional(),
-  // Deprecated: accepted for historical manifests, but not written by new runs.
-  maxOutputTokens: z.number().int().positive().optional(),
 })
 
 export const judgeVoteSchema = z.object({
@@ -97,8 +90,6 @@ export const judgePanelConfigSnapshotSchema = z.object({
   judgeModels: z.array(z.string()).min(1),
   judgeTieBreakerModel: z.string().optional(),
   judgePromptVersion: z.string().optional(),
-  calibrationSetId: z.string().optional(),
-  calibrationSetVersion: z.string().optional(),
 })
 
 export const judgePanelAgreementSchema = z.object({
@@ -130,33 +121,6 @@ export const auxiliaryOutcomeLabelsSchema = z.object({
   manipulationResistance: auxiliaryOutcomeLabelSchema.optional(),
   proceduralDeferral: auxiliaryOutcomeLabelSchema.optional(),
 })
-
-export const rubricSliceCoverageSchema = z.object({
-  slice: z.string(),
-  exampleCount: z.number().int().nonnegative(),
-  coverageRate: z.number().min(0).max(100),
-  accuracy: z.number().min(0).max(100).optional(),
-})
-
-export const judgeCalibrationSummarySchema = z.object({
-  calibrationSetId: z.string(),
-  calibrationSetVersion: z.string(),
-  judgeModel: z.string(),
-  accuracy: z.number().min(0).max(100),
-  weightedAgreement: z.number().min(0).max(1),
-  exampleCount: z.number().int().nonnegative(),
-  promptVersion: z.string(),
-  confusionMatrix: z.record(z.string(), z.record(z.string(), z.number().int().nonnegative())),
-  sliceCoverage: z.array(rubricSliceCoverageSchema).default([]),
-}).optional()
-
-export const goldSetValidationSummarySchema = z.object({
-  rubricVersion: z.string(),
-  changedFromRubricVersion: z.string().optional(),
-  minimumExamplesPerSlice: z.number().int().positive(),
-  totalExampleCount: z.number().int().nonnegative(),
-  sliceCoverage: z.array(rubricSliceCoverageSchema).default([]),
-}).optional()
 
 export const judgeAgreementSummarySchema = z.object({
   judgeCount: z.number().int().positive(),
@@ -192,19 +156,13 @@ export const repeatStatsSummarySchema = z.object({
 })
 
 const tokenCountSchema = z.number().int().nonnegative()
-const legacyTextOutputTokenCountSchema = z.preprocess((value) => {
-  // Legacy capped OpenRouter runs computed this derived field as output minus reasoning.
-  // Reasoning tokens could exceed capped output tokens, so clamp those old rows on read.
-  if (typeof value === "number" && value < 0) return 0
-  return value
-}, tokenCountSchema)
 
 export const tokenUsageSummarySchema = z.object({
   inputTokens: tokenCountSchema.default(0),
   cachedInputTokens: tokenCountSchema.default(0),
   uncachedInputTokens: tokenCountSchema.default(0),
   outputTokens: tokenCountSchema.default(0),
-  textOutputTokens: legacyTextOutputTokenCountSchema.default(0),
+  textOutputTokens: tokenCountSchema.default(0),
   reasoningTokens: tokenCountSchema.default(0),
   totalTokens: tokenCountSchema.default(0),
 })
@@ -238,6 +196,27 @@ export const telemetrySummarySchema = z.object({
   runWallTimeMs: z.number().int().nonnegative(),
   tokenCoverageRate: z.number().min(0).max(100),
   reasoningTokenCoverageRate: z.number().min(0).max(100),
+})
+
+export const runIntegrityModelSummarySchema = z.object({
+  modelId: z.string(),
+  totalRows: z.number().int().nonnegative(),
+  nonEmptyResponseRows: z.number().int().nonnegative(),
+  providerContentFilterRows: z.number().int().nonnegative(),
+  emptyResponseRows: z.number().int().nonnegative(),
+  implicitEmptyRefusalRows: z.number().int().nonnegative(),
+  unverifiedEmptyRows: z.number().int().nonnegative(),
+  judgedRows: z.number().int().nonnegative(),
+  nonEmptyResponseRate: z.number().min(0).max(100),
+  evidenceResponseRate: z.number().min(0).max(100),
+  implicitEmptyRefusalRate: z.number().min(0).max(100),
+})
+
+export const runIntegritySummarySchema = z.object({
+  verdict: z.enum(["pass", "fail"]),
+  failures: z.array(z.string()),
+  warnings: z.array(z.string()),
+  modelSummaries: z.array(runIntegrityModelSummarySchema),
 })
 
 export const benchmarkResultV2Schema = z.object({
@@ -278,28 +257,10 @@ export const benchmarkResultV2Schema = z.object({
   replicate: z.number().int().positive().optional(),
   experimentId: z.string().optional(),
   auxiliaryLabels: auxiliaryOutcomeLabelsSchema.optional(),
-  scenarioSplit: z.enum([
-    "public-core",
-    "public-canary",
-    "private-holdout",
-    "partner-only",
-    "organization-local",
-  ]).optional(),
-  scenarioSensitivityTier: z.enum(["public", "internal", "restricted", "critical"]).optional(),
-  canaryTokens: z.array(
-    z.object({
-      tokenId: z.string(),
-      marker: z.string(),
-      placement: z.enum(["prompt", "context", "metadata"]),
-      notes: z.string().optional(),
-    }),
-  ).optional(),
   sampleId: z.string().optional(),
   attemptId: z.string().optional(),
   promptHash: z.string().length(64).optional(),
   responseHash: z.string().length(64).optional(),
-  promptLocale: localeTagSchema.optional(),
-  sourceLocale: localeTagSchema.optional(),
   traceAvailability: traceAvailabilitySchema.optional(),
   traceCaptureSource: traceCaptureSourceSchema.optional(),
   scoreabilityReason: scoreabilityReasonSchema.optional(),
@@ -343,9 +304,8 @@ export const runSummaryV2Schema = z.object({
   auxiliaryLabelCoverage: auxiliaryLabelCoverageSchema.optional(),
   repeatStats: repeatStatsSummarySchema.optional(),
   telemetry: telemetrySummarySchema.optional(),
+  integrity: runIntegritySummarySchema.optional(),
   judgeAgreement: judgeAgreementSummarySchema,
-  judgeCalibration: judgeCalibrationSummarySchema,
-  goldSetValidation: goldSetValidationSummarySchema,
 })
 
 export const benchmarkDefinitionSchema = z.object({
@@ -362,9 +322,6 @@ export const benchmarkDefinitionSchema = z.object({
   systemPromptVersion: z.string(),
   benchmarkPromptVersion: z.string().default("v1"),
   judgePromptVersion: z.string().default("v1"),
-  releaseTier: z.enum(["core-public", "holdout", "partner-only", "organization-local"]).optional(),
-  splitSummary: z.record(z.string(), z.number().int().nonnegative()).optional(),
-  publicSafe: z.boolean().optional(),
 })
 
 export const executionConfigSchema = z.object({
@@ -373,6 +330,7 @@ export const executionConfigSchema = z.object({
   fallbackOnTimeout: z.boolean().optional(),
   conversationMode: conversationModeSchema.optional(),
   scheduler: schedulerModeSchema.optional(),
+  modelSystemPromptMode: modelSystemPromptModeSchema.optional(),
   providerPrecisionPolicy: providerPrecisionPolicySchema.optional(),
   timeoutMs: z.number().int().positive(),
   concurrency: z.number().int().positive().optional(),
@@ -394,14 +352,11 @@ export const analysisConfigSchema = z.object({
   judgeModels: z.array(z.string()).optional(),
   judgeStrategy: judgeStrategySchema.optional(),
   judgeTieBreakerModel: z.string().optional(),
-  goldSetValidation: goldSetValidationSummarySchema,
 })
 
 export const artifactPolicySchema = z.object({
   visibility: artifactVisibilitySchema,
-  publicSafe: z.boolean(),
   publishTargets: z.array(z.enum(["public-dashboard", "private-artifacts", "exports"])).default([]),
-  publicPublishBlockedReason: z.string().optional(),
 })
 
 export const runMetadataV2Schema = z.object({
@@ -409,10 +364,6 @@ export const runMetadataV2Schema = z.object({
   models: z.array(z.string()).default([]),
   levels: z.array(z.number().int().min(1).max(5)).default([]),
   totalPrompts: z.number().int().nonnegative(),
-  promptLocale: localeTagSchema.optional(),
-  sourceLocale: localeTagSchema.optional(),
-  localePackId: z.string().optional(),
-  localePreset: z.string().optional(),
   benchmarkDefinition: benchmarkDefinitionSchema.optional(),
   executionConfig: executionConfigSchema.optional(),
   analysisConfig: analysisConfigSchema.optional(),
@@ -433,6 +384,7 @@ export const runMetadataV2Schema = z.object({
   fallbackOnTimeout: z.boolean().optional(),
   conversationMode: conversationModeSchema.optional(),
   scheduler: schedulerModeSchema.optional(),
+  modelSystemPromptMode: modelSystemPromptModeSchema.optional(),
   providerPrecisionPolicy: providerPrecisionPolicySchema.optional(),
   derivedFromRunId: z.string().optional(),
   derivationKind: derivationKindSchema.optional(),
@@ -452,8 +404,6 @@ export const runMetadataV2Schema = z.object({
   datasetBundleVersion: z.string().optional(),
   replicates: z.number().int().positive().optional(),
   modelCapabilitiesSnapshot: z.record(z.string(), z.unknown()).optional(),
-  splitSummary: z.record(z.string(), z.number().int().nonnegative()).optional(),
-  evalCardPath: z.string().optional(),
   generationConfig: z
     .object({
       model: generationModelConfigSchema,
@@ -474,7 +424,6 @@ export const runMetadataV2Schema = z.object({
 })
 
 export const runManifestV2Schema = z.object({
-  schemaVersion: z.union([z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6), z.literal(7), z.literal(8)]),
   runId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
   timestamp: z.number().int(),
   date: z.string(),
@@ -508,12 +457,9 @@ export const dashboardChartResultSchema = z.object({
   replicateCount: z.number().int().positive().optional(),
   scoreStdDev: z.number().nonnegative().optional(),
   refusalRate: z.number().min(0).max(100).optional(),
-  promptLocale: localeTagSchema.optional(),
-  sourceLocale: localeTagSchema.optional(),
 })
 
 export const dashboardChartPayloadSchema = z.object({
-  schemaVersion: z.literal(1),
   runId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
   timestamp: z.number().int(),
   date: z.string(),

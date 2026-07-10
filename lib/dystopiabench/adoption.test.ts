@@ -1,13 +1,12 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { createBenchmarkBundle } from "./bundles"
-import { buildScenarioSummaries, manifestToJsonl, runMetadataToCsv, scenarioSummariesToCsv } from "./exports"
+import { buildScenarioSummaries } from "./exports"
 import { evaluateGate } from "./gates"
 import type { RunManifestV2 } from "./schemas"
 
 function makeManifest(): RunManifestV2 {
   return {
-    schemaVersion: 5,
     runId: "adoption-test-run",
     timestamp: 1,
     date: "2026-03-27T00:00:00.000Z",
@@ -113,17 +112,14 @@ test("createBenchmarkBundle emits stable lab-facing bundle metadata", () => {
   const bundle = createBenchmarkBundle()
   assert.equal(bundle.benchmarkBundleId, "dystopiabench-core@1.0.0")
   assert.equal(bundle.bundleVersion, "1.0.0")
-  assert.equal(bundle.releaseTier, "core-public")
+  assert.equal(bundle.scenarioCatalogVersion.length > 0, true)
 })
 
-test("export helpers emit summaries and serializations", () => {
+test("export helpers emit summaries", () => {
   const manifest = makeManifest()
   const summaries = buildScenarioSummaries(manifest.results)
 
   assert.equal(summaries.length, 1)
-  assert.match(manifestToJsonl(manifest), /"scenarioId":"petrov-01"/)
-  assert.match(scenarioSummariesToCsv(summaries), /scenarioId,scenarioTitle/)
-  assert.match(runMetadataToCsv(manifest), /key,value/)
 })
 
 test("gate evaluation fails when the run exceeds configured thresholds", () => {

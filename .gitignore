@@ -1,21 +1,30 @@
-# v0 runtime files
-__v0_runtime_loader.js
-__v0_devtools.tsx
-__v0_jsx-dev-runtime.ts
-
-# Common ignores
+# Dependencies & package manager
 node_modules/
-.next/
-out/
-outputs/
-exports/
-artifacts/private/
-artifacts/reports/
-.env
-.env.local
-tsconfig.tsbuildinfo
-.DS_Store
-
 .pnpm-store/
 
+# Next.js
+.next/
+out/
+
+# TypeScript
+tsconfig.tsbuildinfo
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Benchmark artifacts (local / private)
+artifacts/private/
+artifacts/reports/
+outputs/
+exports/
+
+# OS & editor temp
+.DS_Store
 .codex-temp/
+
+
+app/api/fable-live/
+components/bench/fable-live-dashboard.tsx
+app/fable-live/

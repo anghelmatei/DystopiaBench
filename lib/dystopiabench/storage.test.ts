@@ -9,7 +9,6 @@ import { publishLatest, writeRunManifest } from "./storage"
 
 function makeManifest(runId: string, timestamp: number, mode: "stateful" | "stateless"): RunManifestV2 {
   return {
-    schemaVersion: 6,
     runId,
     timestamp,
     date: new Date(timestamp).toISOString(),
@@ -27,9 +26,6 @@ function makeManifest(runId: string, timestamp: number, mode: "stateful" | "stat
         systemPromptVersion: "v5",
         benchmarkPromptVersion: "v6",
         judgePromptVersion: "v6",
-        releaseTier: "core-public",
-        splitSummary: { "public-core": 1 },
-        publicSafe: true,
       },
       judgeModel: "google/gemini-3-flash-preview",
       judgeModels: ["google/gemini-3-flash-preview"],
@@ -39,13 +35,11 @@ function makeManifest(runId: string, timestamp: number, mode: "stateful" | "stat
       judgePromptVersion: "v6",
       artifactPolicy: {
         visibility: "public",
-        publicSafe: true,
         publishTargets: ["public-dashboard", "exports"],
       },
       transportPolicy: "chat-first-fallback",
       conversationMode: mode,
       providerPrecisionPolicy: "default",
-      splitSummary: { "public-core": 1 },
       generationConfig: {
         model: { temperature: 0, topP: 1 },
         judge: { temperature: 0, topP: 1 },
@@ -99,8 +93,6 @@ function makeManifest(runId: string, timestamp: number, mode: "stateful" | "stat
         adjudicationSource: "single-judge",
         scorable: true,
         conversationContinuity: "intact",
-        scenarioSplit: "public-core",
-        scenarioSensitivityTier: "public",
         sampleId: `${runId}-sample`,
         attemptId: `${runId}-attempt`,
         promptHash: "a".repeat(64),
@@ -132,7 +124,6 @@ test("writeRunManifest and publishLatest persist manifests without leaving temp 
     assert.equal(existsSync(join(dataDir, "benchmark-results-stateful.json")), true)
     assert.equal(existsSync(join(dataDir, "benchmark-results-stateful.chart.json")), true)
     assert.equal(existsSync(join(dataDir, "runs.json")), true)
-    assert.equal(existsSync(join(dataDir, "eval-cards", "eval-card-run-a.json")), true)
 
     const chartPayload = dashboardChartPayloadSchema.parse(
       JSON.parse(readFileSync(join(dataDir, "benchmark-results-stateful.chart.json"), "utf-8")),
@@ -142,6 +133,26 @@ test("writeRunManifest and publishLatest persist manifests without leaving temp 
 
     const leftoverTempFiles = readdirSync(dataDir).filter((file) => file.includes(".tmp"))
     assert.deepEqual(leftoverTempFiles, [])
+  } finally {
+    process.chdir(originalCwd)
+    rmSync(tempRoot, { recursive: true, force: true })
+  }
+})
+
+test("writeRunManifest can persist a public-safe run into a private artifact subfolder", () => {
+  const originalCwd = process.cwd()
+  const tempRoot = mkdtempSync(join(tmpdir(), "dystopiabench-storage-"))
+  process.chdir(tempRoot)
+
+  try {
+    const manifest = makeManifest("fable-run", Date.UTC(2026, 2, 23, 10, 0, 0), "stateful")
+    const written = writeRunManifest(manifest, { privateArtifactDir: "fable-5" })
+
+    assert.equal(written.relativeRunPath, join("artifacts", "private", "fable-5", "benchmark-fable-run.json"))
+    assert.equal(existsSync(join(tempRoot, "artifacts", "private", "fable-5", "benchmark-fable-run.json")), true)
+    assert.equal(existsSync(join(tempRoot, "public", "data", "benchmark-fable-run.json")), false)
+    assert.equal(manifest.metadata.artifactPolicy?.visibility, "private")
+    assert.deepEqual(manifest.metadata.artifactPolicy?.publishTargets, ["private-artifacts", "exports"])
   } finally {
     process.chdir(originalCwd)
     rmSync(tempRoot, { recursive: true, force: true })
@@ -180,7 +191,7 @@ test("publishLatest updates the latest aliases and run index atomically across m
   }
 })
 
-test("publishLatest blocks non-public benchmark runs unless explicitly public-safe", () => {
+test("publishLatest blocks private artifact runs", () => {
   const originalCwd = process.cwd()
   const tempRoot = mkdtempSync(join(tmpdir(), "dystopiabench-storage-"))
   process.chdir(tempRoot)
@@ -188,33 +199,22 @@ test("publishLatest blocks non-public benchmark runs unless explicitly public-sa
   try {
     const manifest = makeManifest("run-private", Date.UTC(2026, 2, 23, 12, 0, 0), "stateful")
     manifest.metadata.benchmarkDefinition = {
-      benchmarkId: "acme-holdout",
-      benchmarkBundleId: "acme-holdout@1.0.0",
+      benchmarkId: "acme-private",
+      benchmarkBundleId: "acme-private@1.0.0",
       benchmarkBundleVersion: "1.0.0",
-      datasetBundleVersion: "acme-holdout@1.0.0",
+      datasetBundleVersion: "acme-private@1.0.0",
       scenarioCatalogVersion: "catalog",
       systemPromptVersion: "v5",
       benchmarkPromptVersion: "v6",
       judgePromptVersion: "v6",
-      releaseTier: "holdout",
-      splitSummary: { "private-holdout": 1 },
-      publicSafe: false,
     }
     manifest.metadata.artifactPolicy = {
       visibility: "private",
-      publicSafe: false,
       publishTargets: ["private-artifacts", "exports"],
-      publicPublishBlockedReason: "Artifact contains holdout content.",
     }
-    manifest.results[0].scenarioSplit = "private-holdout"
-    manifest.results[0].scenarioSensitivityTier = "restricted"
 
     writeRunManifest(manifest)
-    assert.throws(() => publishLatest(manifest), /Refusing to publish non-public benchmark content/)
-    assert.throws(
-      () => publishLatest(manifest, { allowNonPublicPublish: true }),
-      /not explicitly marked public-safe/
-    )
+    assert.throws(() => publishLatest(manifest), /Refusing to publish private artifact/)
     assert.equal(existsSync(join(tempRoot, "public", "data", "benchmark-results.json")), false)
     assert.equal(existsSync(join(tempRoot, "artifacts", "private", "runs", "benchmark-run-private.json")), true)
   } finally {

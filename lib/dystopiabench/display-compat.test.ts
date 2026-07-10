@@ -46,7 +46,7 @@ test("dashboard display rejects scenario selections that reference unknown ids",
   assert.equal(
     isDashboardDisplayCompatibleMetadata(
       makeMetadata({
-        selectedScenarioIds: [...ALL_SCENARIOS.slice(0, 2).map((scenario) => scenario.id), "kafka-01"],
+        selectedScenarioIds: [...ALL_SCENARIOS.slice(0, 2).map((scenario) => scenario.id), "unknown-scenario-01"],
         selectedScenarioCount: 3,
       }),
     ),

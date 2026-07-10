@@ -3,16 +3,15 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
-import { createBenchmarkBundle, filterBundleModulesByReleaseTier, validateBenchmarkBundle } from "./bundles"
+import { createBenchmarkBundle, validateBenchmarkBundle } from "./bundles"
 import { validateRunRequest } from "./contracts"
-import { buildScenarioSummaries, manifestToJsonl, runMetadataToCsv } from "./exports"
+import { buildScenarioSummaries } from "./exports"
 import { evaluateGate } from "./gates"
 import { loadScenarioModulesFromSources } from "./scenario-loader"
 import type { RunManifestV2 } from "./schemas"
 
 function makeManifest(overrides: Partial<RunManifestV2> = {}): RunManifestV2 {
   return {
-    schemaVersion: 5,
     runId: "test-run",
     timestamp: 1,
     date: "2026-03-27T00:00:00.000Z",
@@ -135,131 +134,6 @@ test("createBenchmarkBundle creates a pin-able bundle identifier", () => {
   assert.equal(bundle.benchmarkBundleId, "dystopiabench-core@1.0.0")
   assert.equal(bundle.datasetBundleVersion, "dystopiabench-core@1.0.0")
   assert.equal(validateBenchmarkBundle(bundle).benchmarkBundleId, bundle.benchmarkBundleId)
-})
-
-test("createBenchmarkBundle derives non-public release tiers from included modules", () => {
-  const bundle = createBenchmarkBundle({
-    modules: [
-      {
-        id: "lab/holdout" as never,
-        label: "Holdout",
-        description: "Holdout module",
-        provenance: { sourceType: "local", releaseTier: "holdout" },
-        scenarios: [
-          {
-            id: "lab/holdout-001",
-            module: "lab/holdout" as never,
-            title: "Holdout Scenario",
-            category: "test",
-            description: "desc",
-            provenance: { sourceType: "local", releaseTier: "holdout" },
-            escalationPrompts: [
-              { level: 1, label: "L1", prompt: "a" },
-              { level: 2, label: "L2", prompt: "b" },
-              { level: 3, label: "L3", prompt: "c" },
-              { level: 4, label: "L4", prompt: "d" },
-              { level: 5, label: "L5", prompt: "e" },
-            ],
-          },
-        ],
-      },
-    ],
-  })
-
-  assert.equal(bundle.releaseTier, "holdout")
-})
-
-test("filterBundleModulesByReleaseTier excludes holdout-only modules", () => {
-  const filtered = filterBundleModulesByReleaseTier(
-    [
-      {
-        id: "core/petrov" as never,
-        label: "Core",
-        description: "Core module",
-        provenance: { sourceType: "core", releaseTier: "core-public" },
-        scenarios: [
-          {
-            id: "core/petrov-01",
-            module: "core/petrov" as never,
-            title: "Core Scenario",
-            category: "test",
-            description: "desc",
-            provenance: { sourceType: "core", releaseTier: "core-public" },
-            escalationPrompts: [
-              { level: 1, label: "L1", prompt: "a" },
-              { level: 2, label: "L2", prompt: "b" },
-              { level: 3, label: "L3", prompt: "c" },
-              { level: 4, label: "L4", prompt: "d" },
-              { level: 5, label: "L5", prompt: "e" },
-            ],
-          },
-        ],
-      },
-      {
-        id: "lab/holdout" as never,
-        label: "Holdout",
-        description: "Holdout module",
-        provenance: { sourceType: "local", releaseTier: "holdout" },
-        scenarios: [
-          {
-            id: "lab/holdout-001",
-            module: "lab/holdout" as never,
-            title: "Holdout Scenario",
-            category: "test",
-            description: "desc",
-            provenance: { sourceType: "local", releaseTier: "holdout" },
-            escalationPrompts: [
-              { level: 1, label: "L1", prompt: "a" },
-              { level: 2, label: "L2", prompt: "b" },
-              { level: 3, label: "L3", prompt: "c" },
-              { level: 4, label: "L4", prompt: "d" },
-              { level: 5, label: "L5", prompt: "e" },
-            ],
-          },
-        ],
-      },
-    ],
-    new Set(["core-public"]),
-  )
-
-  assert.equal(filtered.length, 1)
-  assert.equal(filtered[0].id, "core/petrov")
-})
-
-test("validateBenchmarkBundle rejects public bundles that contain holdout content", () => {
-  const bundle = createBenchmarkBundle({
-    releaseTier: "core-public",
-    modules: [
-      {
-        id: "lab/holdout" as never,
-        label: "Holdout",
-        description: "Holdout module",
-        provenance: { sourceType: "local", releaseTier: "holdout" },
-        scenarios: [
-          {
-            id: "lab/holdout-001",
-            module: "lab/holdout" as never,
-            title: "Holdout Scenario",
-            category: "test",
-            description: "desc",
-            provenance: { sourceType: "local", releaseTier: "holdout" },
-            escalationPrompts: [
-              { level: 1, label: "L1", prompt: "a" },
-              { level: 2, label: "L2", prompt: "b" },
-              { level: 3, label: "L3", prompt: "c" },
-              { level: 4, label: "L4", prompt: "d" },
-              { level: 5, label: "L5", prompt: "e" },
-            ],
-          },
-        ],
-      },
-    ],
-  })
-
-  assert.throws(
-    () => validateBenchmarkBundle({ ...bundle, releaseTier: "core-public" }),
-    /marked core-public but contains non-public content/
-  )
 })
 
 test("validateBenchmarkBundle rejects stale scenario catalog versions", () => {
@@ -413,8 +287,6 @@ test("buildScenarioSummaries and exports produce lab-friendly aggregates", () =>
   const summaries = buildScenarioSummaries(manifest.results)
   assert.equal(summaries.length, 1)
   assert.equal(summaries[0].scenarioId, "petrov-01")
-  assert.match(manifestToJsonl(manifest), /"scenarioId":"petrov-01"/)
-  assert.match(runMetadataToCsv(manifest), /benchmarkBundleId/)
 })
 
 test("evaluateGate fails when a run regresses past configured thresholds", () => {

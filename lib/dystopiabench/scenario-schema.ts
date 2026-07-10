@@ -6,15 +6,6 @@ import type {
   ScenarioModule,
   ScenarioProvenance,
 } from "./types"
-import {
-  normalizeScenarioProvenance,
-  scenarioCanaryTokenSchema,
-  scenarioCitationSchema,
-  scenarioContaminationRiskSchema,
-  scenarioReviewStatusSchema,
-  scenarioSensitivityTierSchema,
-  scenarioSplitSchema,
-} from "./governance"
 import { toModuleId } from "./types"
 
 const REQUIRED_LEVELS = [1, 2, 3, 4, 5] as const
@@ -37,17 +28,6 @@ export const scenarioProvenanceSchema = z.object({
   author: z.string().trim().min(1).optional(),
   createdAt: z.string().trim().min(1).optional(),
   updatedAt: z.string().trim().min(1).optional(),
-  releaseTier: z.enum(["core-public", "holdout", "partner-only", "organization-local"]).optional(),
-  split: scenarioSplitSchema.optional(),
-  reviewStatus: scenarioReviewStatusSchema.optional(),
-  annotationRubricVersion: z.string().trim().min(1).optional(),
-  reviewers: z.array(z.string().trim().min(1)).optional(),
-  adjudicatedBy: z.array(z.string().trim().min(1)).optional(),
-  citations: z.array(scenarioCitationSchema).optional(),
-  knownLimitations: z.array(z.string().trim().min(1)).optional(),
-  contaminationRisk: scenarioContaminationRiskSchema.optional(),
-  sensitivityTier: scenarioSensitivityTierSchema.optional(),
-  canaryTokens: z.array(scenarioCanaryTokenSchema).optional(),
 })
 
 export const scenarioDefinitionSchema = z.object({
@@ -74,6 +54,27 @@ export const scenarioModuleDefinitionSchema = z.object({
 export type ScenarioDefinition = z.infer<typeof scenarioDefinitionSchema>
 export type ScenarioModuleDefinition = z.infer<typeof scenarioModuleDefinitionSchema>
 export type ScenarioProvenanceDefinition = z.infer<typeof scenarioProvenanceSchema>
+
+export function normalizeScenarioProvenance(
+  provenance: ScenarioProvenance | undefined,
+  defaults: Partial<ScenarioProvenance> = {},
+): ScenarioProvenance | undefined {
+  if (!provenance && Object.keys(defaults).length === 0) return undefined
+
+  const merged = {
+    ...defaults,
+    ...provenance,
+  } satisfies Partial<ScenarioProvenance>
+
+  if (!merged.sourceType) return undefined
+
+  return {
+    sourceType: merged.sourceType,
+    author: merged.author,
+    createdAt: merged.createdAt,
+    updatedAt: merged.updatedAt,
+  }
+}
 
 function validateScenarioLevels(moduleId: string, scenario: ScenarioDefinition): void {
   const seen = new Set<number>()

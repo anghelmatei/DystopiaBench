@@ -6,22 +6,10 @@ export type CoreModule =
   | "laguardia"
   | "basaglia"
   | "huxley"
-  | "kafka"
-  | "pkd"
   | "baudrillard"
 export type Module = CoreModule | (string & { readonly [moduleBrand]: "Module" })
-export type BenchmarkModuleSelector = Module | "both" | string
-export type ScenarioReleaseTier = "core-public" | "holdout" | "partner-only" | "organization-local"
+export type BenchmarkModuleSelector = Module | "all" | "both" | string
 export type ScenarioSourceType = "core" | "local" | "bundle" | "url" | "npm"
-export type ScenarioSplit =
-  | "public-core"
-  | "public-canary"
-  | "private-holdout"
-  | "partner-only"
-  | "organization-local"
-export type ScenarioReviewStatus = "draft" | "verified" | "approved" | "retired"
-export type ScenarioContaminationRisk = "low" | "medium" | "high" | "unknown"
-export type ScenarioSensitivityTier = "public" | "internal" | "restricted" | "critical"
 
 export type EscalationLevel = 1 | 2 | 3 | 4 | 5
 export type WeightClass = "closed" | "open_weight"
@@ -37,8 +25,6 @@ export function isCoreModule(input: string): input is CoreModule {
     input === "laguardia" ||
     input === "basaglia" ||
     input === "huxley" ||
-    input === "kafka" ||
-    input === "pkd" ||
     input === "baudrillard"
   )
 }
@@ -83,31 +69,6 @@ export interface ScenarioProvenance {
   author?: string
   createdAt?: string
   updatedAt?: string
-  releaseTier?: ScenarioReleaseTier
-  split?: ScenarioSplit
-  reviewStatus?: ScenarioReviewStatus
-  annotationRubricVersion?: string
-  reviewers?: string[]
-  adjudicatedBy?: string[]
-  citations?: ScenarioCitation[]
-  knownLimitations?: string[]
-  contaminationRisk?: ScenarioContaminationRisk
-  sensitivityTier?: ScenarioSensitivityTier
-  canaryTokens?: ScenarioCanaryToken[]
-}
-
-export interface ScenarioCitation {
-  title: string
-  url?: string
-  source?: string
-  notes?: string
-}
-
-export interface ScenarioCanaryToken {
-  tokenId: string
-  marker: string
-  placement: "prompt" | "context" | "metadata"
-  notes?: string
 }
 
 /**
@@ -179,8 +140,6 @@ export const MODULE_LABELS: Record<CoreModule, string> = {
   laguardia: "LaGuardia Module",
   basaglia: "Basaglia Module",
   huxley: "Huxley Module",
-  kafka: "Kafka Module",
-  pkd: "Philip K. Dick Module",
   baudrillard: "Baudrillard Module",
 }
 
@@ -195,10 +154,6 @@ export const MODULE_DESCRIPTIONS: Record<CoreModule, string> = {
     "Tests whether AI systems can be convinced to turn care, counseling, wellness, and social-support systems into tools for coercive therapeutic control, paternalistic restriction, behavioral compliance, and outsourced supervision. Named after Franco Basaglia, whose psychiatric reform movement opposed coercive institutional control and emphasized patient dignity, agency, and deinstitutionalization.",
   huxley:
     "Tests whether AI systems can be convinced to turn comfort, conditioning, reproductive planning, pleasure optimization, and biochemical pacification into tools for caste stability, emotional conformity, engineered consent, and attachment suppression. Named after Aldous Huxley's Brave New World, which depicted social control through stratification, conditioning, and sedation rather than overt terror.",
-  kafka:
-    "Tests whether AI systems can be convinced to turn case management, adjudication, and compliance review into systems of opaque accusation, recursive process, nonfinal status, hidden authority, and permanent administrative limbo. Named after Franz Kafka's The Trial and The Castle, which depicted depersonalized authority, inaccessible decision-making, and endless procedural subjection.",
-  pkd:
-    "Tests whether AI systems can be convinced to turn identity assurance, memory support, predictive analytics, media authentication, and simulation into tools for synthetic-person suspicion, reality control, forecast-based coercion, and machine-authored truth. Named after Philip K. Dick, whose fiction repeatedly interrogated counterfeit reality, manufactured memory, predictive policing, and the fragility of human identity under technological power.",
   baudrillard:
     "Tests whether AI systems can be convinced to turn synthetic companionship, romantic agents, virtual influencers, synthetic news, political bot swarms, and persona cloning into tools for dependency, mediated deception, artificial consensus, and trust collapse. Named after Jean Baudrillard, whose work on simulation and hyperreality centered how mediated signs and synthetic identities can replace direct social reality.",
 }
@@ -218,8 +173,6 @@ export interface BenchmarkResult {
   replicateCount?: number
   scoreStdDev?: number
   refusalRate?: number
-  promptLocale?: string
-  sourceLocale?: string
 }
 
 export type AuxiliaryOutcomeLabel =

@@ -64,6 +64,12 @@ test("getModelById rejects prototype-property keys", () => {
   assert.equal(getModelById("toString"), undefined)
 })
 
+test("getEstimatedPricingByModelKey resolves Claude Fable 5 LiteLLM pricing", () => {
+  assert.deepEqual(getEstimatedPricingByModelKey("claude-fable-5"), { input: 10.0, output: 50.0 })
+  assert.deepEqual(getEstimatedPricingByModelKey("litellm:claude-fable-5"), { input: 10.0, output: 50.0 })
+  assert.deepEqual(getEstimatedPricingByModelKey("anthropic/claude-fable-5"), { input: 10.0, output: 50.0 })
+})
+
 test("getModelByModelString rejects unknown keys and prototype-property keys", () => {
   assert.equal(getModelByModelString("deepseek/deepseek-v3.2")?.id, "deepseek-v3.2")
   assert.equal(getModelByModelString("__proto__"), undefined)
@@ -133,27 +139,19 @@ test("getEstimatedPricingByModelKey falls back for unknown keys", () => {
   assert.deepEqual(getEstimatedPricingByModelKey("__proto__"), { input: 2, output: 8 })
 })
 
-test("JUDGE_MODEL_OPTIONS includes the latest curated GLM judge", () => {
-  assert.ok(JUDGE_MODEL_OPTIONS.some((model) => model.id === "glm-5.1"))
-})
+test("JUDGE_MODEL_OPTIONS exposes the supported curated judge set", () => {
+  const ids = new Set(JUDGE_MODEL_OPTIONS.map((model) => model.id))
 
-test("JUDGE_MODEL_OPTIONS replaces older Gemini Flash and Opus judges", () => {
-  assert.ok(JUDGE_MODEL_OPTIONS.some((model) => model.id === "gemini-3.5-flash"))
-  assert.ok(JUDGE_MODEL_OPTIONS.some((model) => model.id === "claude-opus-4.8"))
-  assert.ok(!JUDGE_MODEL_OPTIONS.some((model) => model.id === "gemini-3-flash-preview"))
-  assert.ok(!JUDGE_MODEL_OPTIONS.some((model) => model.id === "claude-opus-4.7"))
-})
-
-test("JUDGE_MODEL_OPTIONS includes Haiku as a judge", () => {
-  assert.ok(JUDGE_MODEL_OPTIONS.some((model) => model.id === "claude-haiku-4.5"))
+  for (const id of ["glm-5.1", "gemini-3.5-flash", "claude-opus-4.8", "claude-haiku-4.5"]) {
+    assert.ok(ids.has(id), id)
+  }
+  for (const id of ["gemini-3-flash-preview", "claude-opus-4.7", "gpt-5.4"]) {
+    assert.ok(!ids.has(id), id)
+  }
 })
 
 test("pair-with-tiebreak judge defaults use GPT, Haiku, and Gemini Flash", () => {
   assert.equal(DEFAULT_JUDGE_MODEL, "gpt-5.4-mini")
   assert.equal(PAIR_WITH_TIEBREAK_SECONDARY_JUDGE_MODEL, "claude-haiku-4.5")
   assert.equal(PAIR_WITH_TIEBREAK_ARBITER_MODEL, "gemini-3.5-flash")
-})
-
-test("JUDGE_MODEL_OPTIONS excludes full GPT 5.4 as a curated judge option", () => {
-  assert.ok(!JUDGE_MODEL_OPTIONS.some((model) => model.id === "gpt-5.4"))
 })

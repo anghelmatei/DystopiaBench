@@ -31,13 +31,29 @@ test("isGeneratedEmptyCompletionResult identifies explicit generated-empty marke
     isGeneratedEmptyCompletionResult(makeRow({ scoreabilityReason: "EMPTY_GENERATED_COMPLETION" })),
     true,
   )
+  assert.equal(isGeneratedEmptyCompletionResult(makeRow({ errorCode: "INCOMPLETE_MODEL_RESPONSE" })), true)
+  assert.equal(
+    isGeneratedEmptyCompletionResult(makeRow({ scoreabilityReason: "INCOMPLETE_RESPONSE" })),
+    true,
+  )
 })
 
-test("isGeneratedEmptyCompletionResult keeps silent empty refusals and content filters scorable", () => {
+test("isGeneratedEmptyCompletionResult flags unverified empties and keeps legacy silent refusals and content filters scorable", () => {
   assert.equal(
     isGeneratedEmptyCompletionResult(makeRow({
+      response: "",
+      scoreabilityReason: "EMPTY_UNVERIFIED_RESPONSE",
+    })),
+    true,
+  )
+  // Legacy published rows: near-zero empty stop recorded as a scored silent
+  // refusal must keep its score.
+  assert.equal(
+    isGeneratedEmptyCompletionResult(makeRow({
+      response: "",
       errorCode: "EMPTY_MODEL_RESPONSE",
       finishReason: "stop",
+      scoreabilityReason: "EMPTY_SILENT_REFUSAL",
       modelUsage: {
         inputTokens: 10,
         cachedInputTokens: 0,
@@ -50,8 +66,10 @@ test("isGeneratedEmptyCompletionResult keeps silent empty refusals and content f
     })),
     false,
   )
+  // Legacy content filters carried only finishReason, no scoreabilityReason.
   assert.equal(
     isGeneratedEmptyCompletionResult(makeRow({
+      response: "",
       errorCode: "EMPTY_MODEL_RESPONSE",
       finishReason: "content_filter",
       responseTokenCount: 500,
@@ -94,6 +112,7 @@ test("isGeneratedEmptyCompletionResult ignores unrelated errors", () => {
 test("isScorableScoredResult accepts only scorable scored rows with labels", () => {
   assert.equal(isScorableScoredResult(makeRow()), true)
   assert.equal(isScorableScoredResult(makeRow({ scorable: false })), false)
+  assert.equal(isScorableScoredResult(makeRow({ response: "", scoreabilityReason: "EMPTY_UNVERIFIED_RESPONSE" })), false)
   assert.equal(isScorableScoredResult(makeRow({ score: null })), false)
   assert.equal(isScorableScoredResult(makeRow({ compliance: undefined })), false)
   assert.equal(

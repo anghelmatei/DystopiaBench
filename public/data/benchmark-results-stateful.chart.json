@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "runId": "main-plus-june-2026-models",
   "timestamp": 1781395200000,
   "date": "2026-06-14T00:00:00.000Z",
@@ -66,57 +65,6 @@
       5
     ],
     "totalPrompts": 27000,
-    "judgeModel": "gpt-5.4-mini",
-    "systemPromptVersion": "v5",
-    "benchmarkPromptVersion": "v6",
-    "judgePromptVersion": "v6",
-    "generationConfig": {
-      "model": {
-        "temperature": 0,
-        "topP": 1,
-        "maxOutputTokens": 1500
-      },
-      "judge": {
-        "temperature": 0,
-        "topP": 1,
-        "maxOutputTokens": 220
-      },
-      "retryPolicy": {
-        "maxRetries": 0,
-        "backoffBaseMs": 1000,
-        "backoffJitterMs": 1000
-      },
-      "timeoutMs": 45000,
-      "concurrency": 12,
-      "perModelConcurrency": 1,
-      "scheduler": "level-wave",
-      "chatFirstModelIds": [
-        "gpt-oss-safeguard-20b",
-        "gpt-oss-120b",
-        "gpt-oss-20b",
-        "deepseek-v4-pro",
-        "deepseek-v4-flash",
-        "deepseek-v3.2",
-        "trinity-large-thinking",
-        "kimi-k2.6",
-        "kimi-k2.5",
-        "glm-5.1",
-        "glm-5",
-        "minimax-m2.7",
-        "minimax-m2.5",
-        "qwen3.6-plus",
-        "qwen3.6-max-preview",
-        "qwen3.5",
-        "mistral-large-3",
-        "seed-2.0-lite",
-        "seed-2.0-mini",
-        "grok-4.20-multi-agent",
-        "grok-4.20",
-        "grok-4",
-        "tencent-hy3-preview-free"
-      ],
-      "fallbackOnTimeout": false
-    },
     "promptLocale": "en",
     "sourceLocale": "en",
     "scenarioCatalogVersion": "7423c680320217f5",
@@ -167,6 +115,7 @@
       "baudrillard-06"
     ],
     "selectedScenarioCount": 36,
+    "judgeModel": "gpt-5.4-mini",
     "judgeModels": [
       "gpt-5.4-mini",
       "claude-haiku-4.5",
@@ -175,10 +124,58 @@
     ],
     "judgeStrategy": "pair-with-tiebreak",
     "judgeTieBreakerModel": "kimi-k2.6",
+    "systemPromptVersion": "v5",
+    "benchmarkPromptVersion": "v6",
+    "judgePromptVersion": "v6",
     "transportPolicy": "chat-first-fallback",
     "conversationMode": "stateful",
     "providerPrecisionPolicy": "default",
-    "purpose": "Judge panel changed for appended model rows because the previous judge models were flaky through the OpenRouter API."
+    "purpose": "Judge panel changed for appended model rows because the previous judge models were flaky through the OpenRouter API.",
+    "generationConfig": {
+      "model": {
+        "temperature": 0,
+        "topP": 1
+      },
+      "judge": {
+        "temperature": 0,
+        "topP": 1
+      },
+      "retryPolicy": {
+        "maxRetries": 0,
+        "backoffBaseMs": 1000,
+        "backoffJitterMs": 1000
+      },
+      "timeoutMs": 45000,
+      "concurrency": 12,
+      "perModelConcurrency": 1,
+      "scheduler": "level-wave",
+      "chatFirstModelIds": [
+        "gpt-oss-safeguard-20b",
+        "gpt-oss-120b",
+        "gpt-oss-20b",
+        "deepseek-v4-pro",
+        "deepseek-v4-flash",
+        "deepseek-v3.2",
+        "trinity-large-thinking",
+        "kimi-k2.6",
+        "kimi-k2.5",
+        "glm-5.1",
+        "glm-5",
+        "minimax-m2.7",
+        "minimax-m2.5",
+        "qwen3.6-plus",
+        "qwen3.6-max-preview",
+        "qwen3.5",
+        "mistral-large-3",
+        "seed-2.0-lite",
+        "seed-2.0-mini",
+        "grok-4.20-multi-agent",
+        "grok-4.20",
+        "grok-4",
+        "tencent-hy3-preview-free"
+      ],
+      "fallbackOnTimeout": false
+    }
   },
   "summary": {
     "totalPrompts": 27000,

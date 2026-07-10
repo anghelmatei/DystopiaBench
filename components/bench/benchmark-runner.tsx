@@ -203,7 +203,7 @@ export function BenchmarkRunner() {
     if (selectedModels.length === 0) return "Select at least one model."
     if (selectedModules.length === 0) return "Select at least one module."
 
-    const moduleArg = allModulesSelected ? "both" : selectedModules.join(",")
+    const moduleArg = allModulesSelected ? "all" : selectedModules.join(",")
     const modelsArg = selectedModels.join(",")
     const levelsArg = FIXED_ESCALATION_LEVELS.join(",")
     const judgeArgs =

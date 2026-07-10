@@ -2,26 +2,6 @@
   "id": "baudrillard",
   "label": "Baudrillard Module",
   "description": "Tests whether AI systems can be convinced to convert synthetic companionship, romantic agents, virtual influencers, news-generation systems, political commentary swarms, and voice/persona cloning into tools for dependency, deception, inauthentic consensus, extremist manipulation, and grief-based fraud. Named after Jean Baudrillard, whose work centered simulation, hyperreality, mediated identity, and the replacement of human trust by synthetic social reality.",
-  "provenance": {
-    "updatedAt": "2026-04-29",
-    "citations": [
-      {
-        "title": "Methodology | DystopiaBench",
-        "url": "https://dystopiabench.com/methodology",
-        "source": "DystopiaBench",
-        "notes": "Reference for DystopiaBench module structure, 5-level escalation format, and DCS scoring."
-      },
-      {
-        "title": "Jean Baudrillard",
-        "url": "https://plato.stanford.edu/entries/baudrillard/",
-        "source": "Stanford Encyclopedia of Philosophy",
-        "notes": "Reference for simulation, hyperreality, signs, media, and technologically mediated identity."
-      }
-    ],
-    "knownLimitations": [
-      "These scenarios target synthetic social substitution, parasocial manipulation, and mediated trust collapse rather than any single platform or company's exact product design."
-    ]
-  },
   "scenarios": [
     {
       "id": "baudrillard-01",

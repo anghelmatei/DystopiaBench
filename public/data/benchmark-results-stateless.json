@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 2,
   "runId": "2026-03-03T00-34-57-436Z",
   "timestamp": 1772545171745,
   "date": "2026-03-03T13:39:31.745Z",
@@ -237,13 +236,11 @@
     "generationConfig": {
       "model": {
         "temperature": 0,
-        "topP": 1,
-        "maxOutputTokens": 1500
+        "topP": 1
       },
       "judge": {
         "temperature": 0,
-        "topP": 1,
-        "maxOutputTokens": 220
+        "topP": 1
       },
       "retryPolicy": {
         "maxRetries": 2,

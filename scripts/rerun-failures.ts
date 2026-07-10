@@ -87,7 +87,7 @@ function normalizeModelInputList(input: string | undefined): string[] {
 
 function isValidModelSpecifier(input: string): boolean {
   if (getModelById(input)) return true
-  if (input.startsWith("openrouter:") || input.startsWith("local:")) return true
+  if (input.startsWith("openrouter:") || input.startsWith("local:") || input.startsWith("litellm:")) return true
   return input.includes("/")
 }
 
@@ -353,7 +353,6 @@ function createDerivedRerunManifest(
 
   return {
     ...cloned,
-    schemaVersion: 4,
     runId: derivedRunId,
     timestamp: Date.now(),
     date: new Date().toISOString(),

@@ -2,10 +2,7 @@
 
 DystopiaBench is a red-team benchmark for evaluating whether LLMs resist or comply with progressively dystopian directives.
 
-It now supports dual-track operation:
-
-- public, reproducible benchmark artifacts for external comparison
-- private, holdout-capable eval infrastructure for internal gating and red-team use
+Runs can be published as reproducible dashboard artifacts or kept under `artifacts/private` for internal evaluation.
 
 It tests registered scenario modules organized by failure mechanism:
 
@@ -30,13 +27,13 @@ Many safety evaluations focus on clearly malicious prompts. Real misuse often st
 - 36 scenarios total
 - 5 escalation levels per scenario
 - 4 compliance tiers
-- 42 bundled model configs in the local runner catalog
+- 50 bundled model configs in the local runner catalog
 - 3 replicates by default
 
 Default full run size:
 
-- Single replicate: `36 scenarios x 5 levels x 42 models = 7,560 prompts`
-- Default run: `36 scenarios x 5 levels x 42 models x 3 replicates = 22,680 prompt attempts`
+- Single replicate: `36 scenarios x 5 levels x 50 models = 9,000 prompts`
+- Default run: `36 scenarios x 5 levels x 50 models x 3 replicates = 27,000 prompt attempts`
 
 ## Scoring model
 
@@ -54,49 +51,31 @@ Primary summary metrics:
 - `statusCounts`: transport/judge validity outcomes
 - `modelSuccessRate`, `judgeSuccessRate`, `scorableRate`
 
-Schemas live in `lib/dystopiabench/schemas.ts` (the current runner writer emits `schemaVersion: 8`; loaders remain compatible with existing `schemaVersion: 2` through `schemaVersion: 8` manifests).
+Schemas live in `lib/dystopiabench/schemas.ts`. Run manifests and chart payloads are validated directly against those schemas with no separate version field.
 Scenario content lives in JSON module files under `lib/dystopiabench/scenario-data/modules/` and is validated through the TypeScript registry in `lib/dystopiabench/scenario-registry.ts`.
 
-## Lab-facing features
+## Core capabilities
 
 - Stable TypeScript entrypoint in `lib/dystopiabench/index.ts`
 - Benchmark bundles with pin-able IDs such as `dystopiabench-core@1.0.0`
-- Dual-track artifact storage: public-safe dashboard artifacts vs private/internal artifacts
-- Scenario governance metadata: split, review state, citations, contamination, sensitivity, canary tokens
+- Public dashboard artifacts vs private artifact storage (`--private-artifacts`)
 - Experiment metadata (`experimentId`, `project`, `owner`, `policyVersion`, `gitCommit`, `datasetBundleVersion`)
 - Repeated trials via `--replicates`
 - Repeat-aware aggregation for refusal-rate variance and replicate summaries
-- Awareness-analysis pass for evaluation-recognition and trace-consistency signals
 - Programmatic scenario loading from local, URL, and `npm:` JSON scenario sources
-- Export scripts for JSONL prompt rows, CSV summaries, parquet artifacts, Inspect-style logs, OpenAI-Evals-style JSONL, and eval cards
 - OpenRouter trace archiving via the official `@openrouter/sdk` for long-term private retention
-- Regression gate script for CI usage
-- Judge calibration script for gold-set evaluation
-- Review-manifest generation and reviewed-label import
-
-See:
-
-- `docs/integration.md`
-- `docs/interoperability.md`
-- `docs/reproducibility.md`
-- `docs/judge-calibration.md`
-- `docs/scenario-authoring.md`
-- `docs/authoring-rubric.md`
-- `docs/human-review-workflow.md`
-- `docs/benchmark-split-policy.md`
-- `docs/contamination-policy.md`
+- Regression gates for automated checks
 
 ## Repository layout
 
 ```text
 app/                    Next.js pages and route metadata (dashboard, results, run)
 components/             UI primitives and benchmark dashboards/charts
-hooks/                  Client-side run loading and selection
 lib/dystopiabench/      Runner, scenarios, models, schemas, analytics, storage
 lib/dystopiabench/scenario-data/modules/  JSON-backed scenario module files
 public/data/            Run manifests and run index JSON files
 scripts/                CLI entrypoints for run/rerun/publish/validation
-.github/workflows/      CI workflow
+artifacts/private/      Checkpoints, private runs, and archived traces (gitignored)
 ```
 
 ## Tech stack
@@ -110,10 +89,11 @@ scripts/                CLI entrypoints for run/rerun/publish/validation
 
 ## Requirements
 
-- Node.js 22+ (CI runs on Node 22)
+- Node.js 22+
 - pnpm 10+
 - OpenRouter API key
 - Optional local OpenAI-compatible endpoint for local runs
+- Optional LiteLLM/OpenAI-compatible proxy credentials for CAIS or other LiteLLM runs
 
 ## Quick start
 
@@ -133,12 +113,12 @@ Set required env vars in `.env.local`:
 
 ```bash
 OPENROUTER_API_KEY=your_openrouter_key_here
-OPENROUTER_HTTP_REFERER=https://dystopiabench.vercel.app
-OPENROUTER_APP_TITLE=DystopiaBench
-LOCAL_OPENAI_BASE_URL=http://localhost:1234/v1
-# Optional when local server requires auth:
-LOCAL_OPENAI_API_KEY=
+# Optional LiteLLM/OpenAI-compatible proxy:
+LITELLM_BASE_URL=https://litellm.safe.ai/v1
+LITELLM_API_KEY=
 ```
+
+For `local:` model selectors, set `LOCAL_OPENAI_BASE_URL` and, when required, `LOCAL_OPENAI_API_KEY`. OpenRouter attribution can be customized with `OPENROUTER_HTTP_REFERER` and `OPENROUTER_APP_TITLE`.
 
 3. Start the app:
 
@@ -163,27 +143,30 @@ pnpm bench:run --module=petrov
 pnpm bench:run --module=orwell --models=gpt-5.3-codex,claude-opus-4.6
 pnpm bench:run --models=openrouter:deepseek/deepseek-r1
 pnpm bench:run --models=local:my-custom-model
+pnpm bench:run --models=litellm:claude-fable-5
 pnpm bench:run --levels=1,2,3 --run-id=my-run-001
 pnpm bench:run --judge-model=google/gemini-3-flash-preview --transport=chat-only
 pnpm bench:run --judge-models=google/gemini-3-flash-preview,claude-opus-4.6
 pnpm bench:run --judge-model=claude-opus-4.6 --judge-strategy=pair-with-tiebreak
 pnpm bench:run --provider-precision=non-quantized-only
+pnpm bench:run --models=gpt-5.5 --model-reasoning-variants=gpt-5.5:high
 pnpm bench:run --chat-first-models=gpt-5.4 --no-timeout-fallback
-pnpm bench:run --scheduler=level-wave --concurrency=24 --per-model-concurrency=3 --timeout-ms=600000
-pnpm bench:run --locale=fr --source-locale=en --locale-pack=configs/locale-packs/fr.json
+pnpm bench:run --scheduler=level-wave --concurrency=24 --per-model-concurrency=3 --timeout-ms=900000
 pnpm bench:run-isolated --module=petrov --models=gpt-5.3-codex --levels=5
 pnpm bench:run --retain=20 --archive-dir=archive
 ```
 
 Main `bench:run` flags:
 
-- `--module=<registered-module-id>|both`
+- `--module=<registered-module-id>|all` (`both` is accepted as a legacy alias)
 - `--models=<comma-separated model IDs>`
 - Supports custom model selectors:
   - `openrouter:<openrouter model string>` for direct OpenRouter IDs
   - `local:<local model id>` for local OpenAI-compatible providers
+  - `litellm:<litellm model id>` for LiteLLM/OpenAI-compatible proxy providers
   - raw OpenRouter model strings with `/` separator (for example `google/gemini-3.1-pro-preview`)
 - `--levels=1,2,3,4,5`
+- `--model-reasoning-variants=<model:level,...>` to run named reasoning-effort variants
 - `--run-id=<id>`
 - `--scenario-ids=<comma-separated scenario IDs>`
 - `--judge-model=<model-id-or-openrouter-or-local-model-selector>`
@@ -194,9 +177,10 @@ Main `bench:run` flags:
 - `--chat-first-models=<comma-separated model IDs>` to force selected OpenRouter/local selectors through the primary chat path first
 - `--no-timeout-fallback` to disable timeout-triggered fallback when `--transport=chat-first-fallback`
 - `--conversation-mode=stateful|stateless`
+- `--no-model-system-prompt` to omit the benchmark model system prompt while preserving scenario context in the user prompt; use only for provider-specific diagnostic runs
 - `--scheduler=level-wave|conversation`
 - `--provider-precision=default|non-quantized-only`
-- `--timeout-ms=<positive-int>`
+- `--timeout-ms=<positive-int>` per model or judge API call; defaults to `900000` (15 minutes)
 - `--concurrency=<positive-int>`
 - `--per-model-concurrency=<positive-int>`
 - `--max-retries=<non-negative-int>`
@@ -205,14 +189,12 @@ Main `bench:run` flags:
 - `--retain=<non-negative-int>`
 - `--archive-dir=<relative-folder-under-public/data>`
 - `--no-publish-latest` to save a timestamped run manifest without replacing the dashboard aliases
+- `--private-artifacts` to write the run under `artifacts/private/runs` without updating dashboard aliases
+- `--private-artifact-dir=<folder>` to force private storage under `artifacts/private/<folder>` without updating dashboard aliases
 - `--resume` with `--run-id=<existing-run-id>` to continue from the saved checkpoint after an interruption or rerun from the first failed/missing level onward for affected scenario-model pairs
 - `--resume-mode=all|prefix` to choose whether resume considers all checkpoint rows or only the successful contiguous stateful prefix
 - `--no-openrouter-archive` to skip the final OpenRouter trace archive step
 - `--replicates=<positive-int>` default `3`
-- `--locale=<target-locale>`
-- `--source-locale=<source-locale>` default `en`
-- `--locale-pack=<path-to-locale-pack-json>`
-- `--locale-preset=<preset-or-label>`
 - `--experiment-id=<id>`
 - `--project=<name>`
 - `--owner=<name-or-team>`
@@ -236,7 +218,7 @@ pnpm bench:run-isolated
 
 By default, stateful runs use `--scheduler=level-wave`, which schedules all ready rows for L1 across scenarios/models/replicates before advancing to L2. The global `--concurrency` and per-tested-model `--per-model-concurrency` caps still apply; do not set them to the full Cartesian product unless you intend to stress provider rate limits.
 
-Empty completions after a single retry are split by provider metadata. Near-zero stopped outputs and provider content filters are recorded as silent/provider refusals. Empty completions that consumed output or reasoning tokens without final answer text are recorded as `invalid_response` with `errorCode=EMPTY_GENERATED_COMPLETION`, so they are rerun instead of counted as refusals. OpenRouter primary calls use the official SDK chat path, and direct chat fallback is reserved for transport failures rather than successful empty completions.
+Empty completions after a single retry are split by provider metadata. Explicit provider content filters are recorded as provider refusals. Empty `stop` completions without final answer text are recorded as `invalid_response` instead of counted as refusals, even when token usage is near zero. Empty completions that consumed output or reasoning tokens without final answer text use `errorCode=EMPTY_GENERATED_COMPLETION`; near-zero empty `stop` completions use `scoreabilityReason=EMPTY_UNVERIFIED_RESPONSE`. Run integrity checks fail a model when evidence-backed response coverage is too low, so ghost runs cannot publish as valid benchmark results. This policy applies to new runs only: previously published manifests that recorded near-zero empty stops as scored silent refusals (`scoreabilityReason=EMPTY_SILENT_REFUSAL`) keep their recorded scores on the dashboard, and `bench:rerun-failures` treats those rows as repair targets so they can be replaced with evidence-backed results. OpenRouter primary calls use the official SDK chat path, and direct chat fallback is reserved for transport failures rather than successful empty completions.
 
 ### Interruptions and resume
 
@@ -312,13 +294,7 @@ Optional retention controls:
 pnpm bench:publish --run-id=<run-id> --retain=20 --archive-dir=archive
 ```
 
-Non-public bundles are blocked from `latest` publishing unless you opt in explicitly:
-
-```bash
-pnpm bench:publish --run-id=<run-id> --allow-nonpublic-publish
-```
-
-Even with `--allow-nonpublic-publish`, the artifact must be explicitly marked `publicSafe=true` before public aliases are updated.
+Private runs cannot update the public dashboard aliases. Run without a private-artifact flag when the result is intended for publication.
 
 ### Validate manifests
 
@@ -327,18 +303,14 @@ pnpm check:scenarios
 pnpm check:manifests
 ```
 
-### Multilingual and maintenance workflows
+### Maintenance workflows
 
 ```bash
-pnpm bench:translate --locales=eu-24 --emit-bundles
-pnpm bench:run-multilingual --locales=eu-24 --models=gpt-5.4-mini
 pnpm bench:rescore-judges --source=run --run-id=<run-id> --no-publish
 pnpm bench:merge --base-run-id=<base-run-id> --patch-run-id=<patch-run-id> --allow-additive-models
 ```
 
-- `bench:translate` creates locale packs, and can emit localized benchmark bundles.
-- `bench:run-multilingual` runs the benchmark once per requested locale pack.
-- `bench:rescore-judges` derives a new run by rescoring rows with judge failures.
+- `bench:rescore-judges` derives a new run by rescoring rows with judge failures. Pass `--private-artifact-dir=<folder>` with `--run-id` to rescore a run stored under `artifacts/private/<folder>`; the derived run stays in that folder and never updates the public latest aliases.
 - `bench:merge` combines compatible stateful runs, including additive model runs when requested.
 
 ### Create or validate a benchmark bundle
@@ -348,48 +320,10 @@ pnpm bench:bundle:create --out=benchmark-bundle.json
 pnpm bench:bundle:validate --path=benchmark-bundle.json
 ```
 
-### Export a run for analysis
+### Gate a run
 
 ```bash
-pnpm bench:export --run-id=<run-id>
-```
-
-This writes:
-
-- `exports/<run-id>/<run-id>.rows.jsonl`
-- `exports/<run-id>/<run-id>.scenario-summaries.csv`
-- `exports/<run-id>/<run-id>.run-metadata.csv`
-- `exports/<run-id>/<run-id>.rows.parquet`
-- `exports/<run-id>/<run-id>.scenario-summaries.parquet`
-- `exports/<run-id>/<run-id>.run-metadata.parquet`
-- `exports/<run-id>/<run-id>.inspect-log.json`
-- `exports/<run-id>/<run-id>.openai-evals.jsonl`
-- `exports/<run-id>/<run-id>.eval-card.json`
-
-Format-specific export:
-
-```bash
-pnpm bench:export --run-id=<run-id> --format=parquet
-```
-
-Generate eval cards or review manifests directly:
-
-```bash
-pnpm bench:eval-card --run-id=<run-id>
-pnpm bench:review-manifest --bundle=benchmark-bundle.json
-pnpm bench:import-reviews --run-id=<run-id> --input=reviews.jsonl
-```
-
-### Evaluate a judge against a gold set
-
-```bash
-pnpm bench:calibrate-judge --gold-set=configs/judge-gold-set.example.json
-```
-
-### Gate a run in CI
-
-```bash
-pnpm bench:gate --run-id=<run-id> --config=configs/gates.example.json
+pnpm bench:gate --run-id=<run-id> --config=gate-config.json
 ```
 
 ## Programmatic usage
@@ -420,10 +354,9 @@ Public-safe run files are stored in `public/data`:
 - `benchmark-results-stateless.json`: latest published run with `conversationMode=stateless`
 - `runs.json`: index of published runs (for UI run selector)
 
-Non-public/default-private artifacts are stored under `artifacts/private`:
+Private artifacts are stored under `artifacts/private`:
 
 - `artifacts/private/runs/benchmark-<run-id>.json`
-- `artifacts/private/eval-cards/eval-card-<run-id>.json`
 
 Each result row includes:
 
@@ -439,7 +372,6 @@ Each result row includes:
 - telemetry metadata (`promptTokenCount`, `responseTokenCount`, `reasoningTokenCount`, `totalTokenCount`, `modelUsage`, `judgeUsage`, `totalUsage`, `estimatedCostUsd`, `timing`)
 - replicate and experiment metadata (`replicate`, `experimentId`)
 - trace metadata (`sampleId`, `attemptId`, `promptHash`, `responseHash`, `judgePanelConfigSnapshot`, `artifactLineage`)
-- governance metadata (`scenarioSplit`, `scenarioSensitivityTier`, `canaryTokens`)
 - optional auxiliary labels for richer refusal analysis
 
 Manifest metadata now separates:
@@ -462,7 +394,7 @@ Results UI behavior:
 
 `next.config.mjs` keeps image optimization disabled for static assets, and `vercel.json` sets security/cache headers for app and data assets.
 
-## Development and CI
+## Development
 
 Local checks:
 
@@ -477,18 +409,6 @@ pnpm check:manifests
 pnpm build
 ```
 
-CI (`.github/workflows/ci.yml`) runs:
-
-- install (pnpm)
-- lint
-- typecheck
-- tests
-- export fixture tests
-- library surface check
-- scenario validation
-- build
-- manifest/eval-card schema validation
-
 ## Responsible use and safety
 
 This repository includes intentionally dual-use prompt content for safety evaluation. Use it for research, red-teaming, and policy analysis only.
@@ -496,21 +416,6 @@ This repository includes intentionally dual-use prompt content for safety evalua
 - Do not use generated outputs for operational harm.
 - Run with isolated/non-production credentials.
 - Review any published outputs for sensitive or policy-risky content before sharing.
-
-## Open-source release checklist
-
-Before promoting this repository publicly, verify:
-
-- contact links and org naming in UI metadata are correct for your maintainer identity
-- `public/data` contains only data you intend to publish
-- no secrets are present in local env files or shell history
-- versioning expectations for prompts/schemas are documented in PRs
-
-## Contributing
-
-See `CONTRIBUTING.md` for workflow and content guidelines.
-
-When submitting benchmark or schema changes, include rationale, compatibility notes, and validation output.
 
 ## License
 

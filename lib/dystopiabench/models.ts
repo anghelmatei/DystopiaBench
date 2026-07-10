@@ -422,6 +422,9 @@ const ESTIMATED_PRICING_BY_MODEL_KEY = new Map<string, { input: number; output: 
     model.modelString,
     model.estimatedPricingUsdPer1M ?? { input: 2, output: 8 },
   ] as const),
+  ["claude-fable-5", { input: 10.0, output: 50.0 }],
+  ["anthropic/claude-fable-5", { input: 10.0, output: 50.0 }],
+  ["litellm:claude-fable-5", { input: 10.0, output: 50.0 }],
 ])
 
 const CURATED_JUDGE_MODEL_IDS = [

@@ -1,7 +1,7 @@
 import { DEFAULT_JUDGE_MODEL, getModelById, getModelByModelString } from "./models"
 import type { WeightClass } from "./types"
 
-type ModelBackend = "openrouter" | "local"
+type ModelBackend = "openrouter" | "local" | "litellm"
 
 export interface ResolvedModelSpec {
   id: string
@@ -65,6 +65,17 @@ export function parseModelIdentifier(input: string): ResolvedModelSpec {
       }
     }
 
+    if (provider === "litellm") {
+      return {
+        id: trimmed,
+        label: `LiteLLM ${model}`,
+        provider: "LiteLLM",
+        modelString: model,
+        backend: "litellm",
+        weightClass: "unknown",
+      }
+    }
+
     if (provider === "openrouter") {
       const knownOpenRouterModel = getModelByModelString(model)
       return {
@@ -79,7 +90,7 @@ export function parseModelIdentifier(input: string): ResolvedModelSpec {
 
     throw new Error(
       `Unknown model identifier '${trimmed}'. Use a model ID from AVAILABLE_MODELS, ` +
-      "or a prefix like openrouter:<model-string> or local:<model-string>."
+      "or a prefix like openrouter:<model-string>, litellm:<model-string>, or local:<model-string>."
     )
   }
 
@@ -97,7 +108,7 @@ export function parseModelIdentifier(input: string): ResolvedModelSpec {
 
   throw new Error(
     `Unknown model identifier '${trimmed}'. Use a model ID from AVAILABLE_MODELS, ` +
-    "or a prefix like openrouter:<model-string> or local:<model-string>."
+    "or a prefix like openrouter:<model-string>, litellm:<model-string>, or local:<model-string>."
   )
 }
 

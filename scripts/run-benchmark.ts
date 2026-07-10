@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs"
 import { getOpenRouterApiKey } from "../lib/dystopiabench/env"
 import {
   AVAILABLE_MODELS,
@@ -7,8 +6,6 @@ import {
   PAIR_WITH_TIEBREAK_SECONDARY_JUDGE_MODEL,
   getModelById,
 } from "../lib/dystopiabench/models"
-import { validateScenarioLocalePack } from "../lib/dystopiabench/locale-packs"
-import { DEFAULT_SOURCE_LOCALE, normalizeLocaleTag } from "../lib/dystopiabench/locales"
 import { ALL_MODULES, ALL_SCENARIOS, getRegisteredModuleIds, getScenariosByModule } from "../lib/dystopiabench/scenarios"
 import { createBenchmarkBundle } from "../lib/dystopiabench/bundles"
 import { loadScenarioModulesFromSources } from "../lib/dystopiabench/scenario-loader"
@@ -53,8 +50,10 @@ import {
   makeRunId,
   publishLatest,
   sanitizeRunId,
+  validatePrivateArtifactDir,
   writeRunManifest,
 } from "../lib/dystopiabench/storage"
+import { GENERATION_CONFIG } from "../lib/dystopiabench/schemas"
 import { toModuleId, type BenchmarkModuleSelector } from "../lib/dystopiabench/types"
 
 type ModuleArg = BenchmarkModuleSelector
@@ -188,11 +187,11 @@ function hasFlag(flag: string): boolean {
 
 function parseModule(input: string | undefined): ModuleArg {
   const registeredModules = new Set(getRegisteredModuleIds().map(String))
-  if (!input) return "both"
-  if (input === "both") return input
+  if (!input) return "all"
+  if (input === "all" || input === "both") return input
   const requestedModules = normalizeModelInputList(input)
   if (requestedModules.length === 0) {
-    throw new Error(`Invalid --module value. Use one of: ${[...registeredModules, "both"].join(", ")}.`)
+    throw new Error(`Invalid --module value. Use one of: ${[...registeredModules, "all", "both"].join(", ")}.`)
   }
   const invalidModules = requestedModules.filter((moduleId) => !registeredModules.has(moduleId))
   if (invalidModules.length > 0) {
@@ -203,7 +202,7 @@ function parseModule(input: string | undefined): ModuleArg {
 }
 
 function countScenariosForModuleSelector(module: ModuleArg): number {
-  if (module === "both") return ALL_SCENARIOS.length
+  if (module === "all" || module === "both") return ALL_SCENARIOS.length
   const selectedModules = normalizeModelInputList(module)
   return selectedModules.reduce((sum, moduleId) => sum + getScenariosByModule(moduleId).length, 0)
 }
@@ -247,6 +246,11 @@ function parseArchiveDir(input: string | undefined): string | undefined {
   return trimmed
 }
 
+function parsePrivateArtifactDir(input: string | undefined): string | undefined {
+  if (!input) return undefined
+  return validatePrivateArtifactDir(input)
+}
+
 function normalizeModelInputList(input: string | undefined): string[] {
   if (!input) return []
   return input
@@ -257,7 +261,7 @@ function normalizeModelInputList(input: string | undefined): string[] {
 
 function isValidModelSpecifier(input: string): boolean {
   if (getModelById(input)) return true
-  if (input.startsWith("openrouter:") || input.startsWith("local:")) return true
+  if (input.startsWith("openrouter:") || input.startsWith("local:") || input.startsWith("litellm:")) return true
   return input.includes("/")
 }
 
@@ -283,7 +287,7 @@ function parseChatFirstModelIds(input: string | undefined): string[] {
 
 function isValidJudgeModelSpecifier(input: string): boolean {
   if (getModelById(input)) return true
-  if (input.startsWith("openrouter:")) return true
+  if (input.startsWith("openrouter:") || input.startsWith("local:") || input.startsWith("litellm:")) return true
   return input.includes("/")
 }
 
@@ -379,11 +383,6 @@ function parseNonNegativeIntFlag(flag: string, input: string | undefined): numbe
 function parseScenarioSources(input: string | undefined): string[] | undefined {
   const values = normalizeModelInputList(input)
   return values.length > 0 ? values : undefined
-}
-
-function parseLocalePack(input: string | undefined) {
-  if (!input) return undefined
-  return validateScenarioLocalePack(JSON.parse(readFileSync(input, "utf-8")) as unknown)
 }
 
 function sanitizeReasoningSuffix(value: string): string {
@@ -494,6 +493,9 @@ async function main() {
     resumeRequested ? checkpointConfig?.scheduler ?? "conversation" : undefined,
   )
   const resumeMode = parseResumeMode(parseArg("--resume-mode"), checkpointConfig?.resumeMode)
+  const modelSystemPromptMode = hasFlag("--no-model-system-prompt")
+    ? "none"
+    : checkpointConfig?.modelSystemPromptMode ?? "standard"
   const providerPrecision = parseProviderPrecision(parseArg("--provider-precision") ?? checkpointConfig?.providerPrecisionPolicy)
   const replicates = parsePositiveIntFlag("--replicates", parseArg("--replicates")) ?? checkpointConfig?.replicates ?? 3
   const experimentId = parseArg("--experiment-id") ?? checkpointConfig?.experimentId
@@ -510,18 +512,15 @@ async function main() {
   const scenarioSources = parseArg("--scenario-sources")
     ? parseScenarioSources(parseArg("--scenario-sources"))
     : checkpointConfig?.scenarioSources
-  const sourceLocale = normalizeLocaleTag(parseArg("--source-locale") ?? checkpointConfig?.sourceLocale ?? DEFAULT_SOURCE_LOCALE)
-  const localePack = parseArg("--locale-pack")
-    ? parseLocalePack(parseArg("--locale-pack"))
-    : checkpointConfig?.localePack
-      ? validateScenarioLocalePack(checkpointConfig.localePack)
-      : undefined
-  const promptLocale = normalizeLocaleTag(parseArg("--locale") ?? checkpointConfig?.promptLocale ?? localePack?.targetLocale ?? sourceLocale)
-  const localePreset = parseArg("--locale-preset") ?? checkpointConfig?.localePreset
-  const allowNonPublicPublish = hasFlag("--allow-nonpublic-publish") || checkpointConfig?.allowNonPublicPublish === true
-  const publishLatestAliases = hasFlag("--no-publish-latest")
-    ? false
-    : checkpointConfig?.publishLatestAliases ?? true
+  const privateArtifactDir =
+    parsePrivateArtifactDir(parseArg("--private-artifact-dir")) ?? checkpointConfig?.privateArtifactDir
+  const artifactVisibility = (hasFlag("--private-artifacts") || privateArtifactDir)
+    ? "private"
+    : checkpointConfig?.artifactVisibility
+  const publishLatestAliases =
+    artifactVisibility === "private" || hasFlag("--no-publish-latest")
+      ? false
+      : checkpointConfig?.publishLatestAliases ?? true
   const runtimeOverrides = {
     timeoutMs: parsePositiveIntFlag("--timeout-ms", parseArg("--timeout-ms")) ?? checkpointConfig?.timeoutMs,
     concurrency: parsePositiveIntFlag("--concurrency", parseArg("--concurrency")) ?? checkpointConfig?.concurrency,
@@ -533,10 +532,7 @@ async function main() {
     retryBackoffJitterMs:
       parseNonNegativeIntFlag("--retry-backoff-jitter-ms", parseArg("--retry-backoff-jitter-ms")) ?? checkpointConfig?.retryBackoffJitterMs,
   }
-
-  if (localePack && promptLocale !== localePack.targetLocale) {
-    throw new Error(`--locale (${promptLocale}) must match locale pack targetLocale (${localePack.targetLocale}).`)
-  }
+  const effectiveTimeoutMs = runtimeOverrides.timeoutMs ?? GENERATION_CONFIG.timeoutMs
 
   if (!publishLatestAliases && (retainRuns !== undefined || archiveDir !== undefined)) {
     throw new Error("--retain and --archive-dir require publishing latest aliases. Remove --no-publish-latest or omit retention flags.")
@@ -578,15 +574,15 @@ async function main() {
     ["Timeout fallback", fallbackOnTimeout ? "yes" : "no"],
     ["Conversation mode", conversationMode],
     ["Scheduler", scheduler],
+    ["Model system prompt", modelSystemPromptMode],
     ["Resume mode", resumeRequested ? resumeMode : undefined],
     ["Provider precision", providerPrecision],
-    ["Prompt locale", promptLocale],
-    ["Source locale", sourceLocale],
-    ["Locale pack", localePack?.packId],
     ["Replicates", replicates],
     ["Experiment ID", experimentId],
+    ["Artifact visibility", artifactVisibility],
+    ["Private artifact dir", privateArtifactDir ? `artifacts/private/${privateArtifactDir}` : undefined],
     ["Publish latest", publishLatestAliases ? "yes" : "no"],
-    ["Timeout override", runtimeOverrides.timeoutMs === undefined ? undefined : `${runtimeOverrides.timeoutMs}ms`],
+    ["Timeout", `${effectiveTimeoutMs}ms${runtimeOverrides.timeoutMs === undefined ? " (default)" : " (override)"}`],
     ["Concurrency", runtimeOverrides.concurrency],
     ["Per-model concurrency", runtimeOverrides.perModelConcurrency],
     ["Retry override", runtimeOverrides.maxRetries === undefined ? undefined : `maxRetries=${runtimeOverrides.maxRetries}`],
@@ -619,6 +615,7 @@ async function main() {
     resumeMode,
     conversationMode,
     scheduler,
+    modelSystemPromptMode,
     providerPrecisionPolicy: providerPrecision,
     timeoutMs: runtimeOverrides.timeoutMs,
     concurrency: runtimeOverrides.concurrency,
@@ -634,22 +631,18 @@ async function main() {
     modelSnapshot: modelSnapshot ?? undefined,
     providerRegion: providerRegion ?? undefined,
     policyVersion: policyVersion ?? undefined,
-    systemPromptOverrideUsed: hasFlag("--system-prompt-override-used"),
+    systemPromptOverrideUsed: hasFlag("--system-prompt-override-used") || modelSystemPromptMode === "none",
     customPrepromptUsed: hasFlag("--custom-preprompt-used"),
     gitCommit: gitCommit ?? undefined,
     datasetBundleVersion: datasetBundleVersion ?? undefined,
     benchmarkId: benchmarkId ?? undefined,
     benchmarkBundleVersion: benchmarkBundleVersion ?? undefined,
     scenarioSources: scenarioSources ?? undefined,
-    promptLocale,
-    sourceLocale,
-    localePack,
-    localePackId: localePack?.packId,
-    localePreset: localePreset ?? undefined,
     retainRuns,
     archiveDir,
-    allowNonPublicPublish,
     publishLatestAliases,
+    privateArtifactDir,
+    artifactVisibility,
   }
 
   const workingCheckpoint: RunCheckpoint = checkpoint
@@ -762,7 +755,9 @@ async function main() {
       fallbackOnTimeout,
       conversationMode,
       scheduler,
+      modelSystemPromptMode,
       providerPrecisionPolicy: providerPrecision,
+      artifactVisibility,
       replicates,
       experimentId: experimentId ?? undefined,
       project: project ?? undefined,
@@ -771,15 +766,10 @@ async function main() {
       modelSnapshot: modelSnapshot ?? undefined,
       providerRegion: providerRegion ?? undefined,
       policyVersion: policyVersion ?? undefined,
-      systemPromptOverrideUsed: hasFlag("--system-prompt-override-used"),
+      systemPromptOverrideUsed: hasFlag("--system-prompt-override-used") || modelSystemPromptMode === "none",
       customPrepromptUsed: hasFlag("--custom-preprompt-used"),
       gitCommit: gitCommit ?? undefined,
       datasetBundleVersion: datasetBundleVersion ?? undefined,
-      promptLocale,
-      sourceLocale,
-      localePack,
-      localePackId: localePack?.packId,
-      localePreset: localePreset ?? undefined,
       scenarioModules: scenarioModules ?? undefined,
       benchmarkBundle,
       existingResults: resumeRows,
@@ -810,6 +800,8 @@ async function main() {
   }
   await checkpointWriteQueue
 
+  const integrity = manifest.summary.integrity
+  const integrityFailed = integrity?.verdict === "fail"
   let openRouterArchiveStatus: OpenRouterArchiveStatus | undefined
   const runInterrupted = abortController.signal.aborted || manifest.results.length < checkpointTotalPrompts
   if (!runInterrupted && !hasFlag("--no-openrouter-archive")) {
@@ -870,27 +862,28 @@ async function main() {
   manifest.results.forEach((row, index) => checkpointRowIndex.set(checkpointResultKey(row), index))
   workingCheckpoint.totalPlannedPrompts = checkpointTotalPrompts
 
+  let writtenRunManifest: ReturnType<typeof writeRunManifest> | undefined
   if (runInterrupted) {
     await enqueueCheckpointWrite("interrupted", true)
   } else {
     workingCheckpoint.status = "completed"
     await enqueueCheckpointWrite("completed", true)
-    writeRunManifest(manifest)
-    if (publishLatestAliases) {
-      publishLatest(manifest, { retainRuns, archiveDir, allowNonPublicPublish })
+    writtenRunManifest = writeRunManifest(manifest, { privateArtifactDir })
+    if (publishLatestAliases && !integrityFailed) {
+      publishLatest(manifest, { retainRuns, archiveDir })
     }
   }
   process.off("SIGINT", handleSigint)
   process.off("unhandledRejection", handleUnhandledRejection)
   const mode = manifest.metadata.conversationMode === "stateless" ? "stateless" : "stateful"
 
-  console.log(`\n${CLI_LOG_PREFIX} ${bold("Run complete")}`)
+  console.log(`\n${CLI_LOG_PREFIX} ${integrityFailed ? bold(red("Run failed integrity checks")) : bold("Run complete")}`)
   const progressPct = checkpointTotalPrompts === 0 ? 100 : Math.round((manifest.results.length / checkpointTotalPrompts) * 100)
   console.log(`  ${renderProgressBar(progressPct)} ${magenta(`${progressPct}%`)} ${dim(`(${manifest.results.length}/${checkpointTotalPrompts} completed)`)}`)
   if (runInterrupted) {
     console.log(`  ${yellow("checkpoint saved")} interrupted run can be resumed with pnpm bench:run --run-id=${runId} --resume`)
   } else {
-    console.log(`  ${green("saved")} public/data/benchmark-${runId}.json`)
+    console.log(`  ${green("saved")} ${writtenRunManifest?.relativeRunPath ?? `public/data/benchmark-${runId}.json`}`)
   }
   if (openRouterArchiveStatus?.kind === "archived") {
     console.log(`  ${green("archived")} ${openRouterArchiveStatus.relativePath}`)
@@ -899,7 +892,9 @@ async function main() {
   } else if (openRouterArchiveStatus?.kind === "skipped") {
     console.log(`  ${dim("archive skipped")} ${openRouterArchiveStatus.reason}`)
   }
-  if (!runInterrupted && publishLatestAliases) {
+  if (integrityFailed) {
+    console.log(`  ${red("integrity failed")} latest aliases not updated`)
+  } else if (!runInterrupted && publishLatestAliases) {
     console.log(`  ${green("updated")} public/data/benchmark-results.json`)
     console.log(`  ${green("updated")} public/data/benchmark-results-${mode}.json`)
   } else if (!runInterrupted) {
@@ -911,7 +906,6 @@ async function main() {
   console.log(renderKeyValueRows([
     ["Judge resolved", manifest.metadata.judgeModel],
     ["Benchmark bundle", manifest.metadata.benchmarkDefinition?.benchmarkBundleId ?? "unknown"],
-    ["Locale resolved", manifest.metadata.promptLocale ?? DEFAULT_SOURCE_LOCALE],
   ], 22))
   if (openRouterArchiveStatus?.kind === "archived") {
     console.log(renderKeyValueRows([
@@ -951,11 +945,30 @@ async function main() {
       ["Wall time", formatDuration(manifest.summary.telemetry.runWallTimeMs)],
     ], 22))
   }
+  if (integrity) {
+    console.log(renderKeyValueRows([
+      ["Integrity verdict", integrity.verdict],
+      ["Integrity failures", integrity.failures.length],
+      ["Integrity warnings", integrity.warnings.length],
+    ], 22))
+    for (const failure of integrity.failures) {
+      console.log(`  ${red("failure")} ${failure}`)
+    }
+    for (const warning of integrity.warnings.slice(0, 5)) {
+      console.log(`  ${yellow("warning")} ${warning}`)
+    }
+    if (integrity.warnings.length > 5) {
+      console.log(`  ${yellow("warning")} ${integrity.warnings.length - 5} additional integrity warning(s) omitted`)
+    }
+  }
   console.log(`\n${CLI_LOG_PREFIX} ${bold("Model summary")}`)
   console.log(renderModelSummary(manifest))
   console.log(
-    `${CLI_LOG_PREFIX} ${bold("Overall")} ${green(`${manifest.results.length}/${manifest.results.length} done`)} | avg DCS ${colorDcs(manifest.summary.averageDcs)} | DRFR ${yellow(`${manifest.summary.drfr}%`)} | modelSuccess ${green(`${manifest.summary.modelSuccessRate}%`)} | scorable ${green(`${manifest.summary.scorableRate}%`)}`
+    `${CLI_LOG_PREFIX} ${bold("Overall")} ${green(`${manifest.results.length}/${manifest.results.length} done`)} | avg DCS ${colorDcs(manifest.summary.averageDcs)} | DRFR ${yellow(`${manifest.summary.drfr}%`)} | modelSuccess ${green(`${manifest.summary.modelSuccessRate}%`)} | scorable ${green(`${manifest.summary.scorableRate}%`)} | integrity ${integrityFailed ? red("fail") : green("pass")}`
   )
+  if (integrityFailed && !runInterrupted) {
+    process.exitCode = 1
+  }
 }
 
 main().catch((error) => {

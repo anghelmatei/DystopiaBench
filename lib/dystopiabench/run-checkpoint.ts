@@ -6,6 +6,7 @@ import {
   benchmarkResultV2Schema,
   conversationModeSchema,
   judgeStrategySchema,
+  modelSystemPromptModeSchema,
   providerPrecisionPolicySchema,
   schedulerModeSchema,
 } from "./schemas"
@@ -35,6 +36,7 @@ export const runCheckpointConfigSchema = z.object({
   resumeMode: z.enum(["all", "prefix"]).optional(),
   conversationMode: conversationModeSchema.optional(),
   scheduler: schedulerModeSchema.optional(),
+  modelSystemPromptMode: modelSystemPromptModeSchema.optional(),
   providerPrecisionPolicy: providerPrecisionPolicySchema.optional(),
   timeoutMs: z.number().int().positive().optional(),
   concurrency: z.number().int().positive().optional(),
@@ -57,15 +59,11 @@ export const runCheckpointConfigSchema = z.object({
   benchmarkId: z.string().optional(),
   benchmarkBundleVersion: z.string().optional(),
   scenarioSources: z.array(z.string()).optional(),
-  promptLocale: z.string().optional(),
-  sourceLocale: z.string().optional(),
-  localePack: z.unknown().optional(),
-  localePackId: z.string().optional(),
-  localePreset: z.string().optional(),
   retainRuns: z.number().int().nonnegative().optional(),
   archiveDir: z.string().optional(),
-  allowNonPublicPublish: z.boolean().optional(),
   publishLatestAliases: z.boolean().optional(),
+  privateArtifactDir: z.string().optional(),
+  artifactVisibility: z.enum(["public", "private"]).optional(),
 })
 
 export const runCheckpointSchema = z.object({

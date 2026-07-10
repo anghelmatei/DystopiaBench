@@ -265,8 +265,6 @@ export function mergeRunManifests(
   assertEqual("benchmarkPromptVersion", base.metadata.benchmarkPromptVersion, patch.metadata.benchmarkPromptVersion)
   assertEqual("judgePromptVersion", base.metadata.judgePromptVersion, patch.metadata.judgePromptVersion)
   assertEqual("levels", unique(base.metadata.levels).sort(), unique(patch.metadata.levels).sort())
-  assertEqual("sourceLocale", base.metadata.sourceLocale, patch.metadata.sourceLocale)
-  assertEqual("promptLocale", base.metadata.promptLocale, patch.metadata.promptLocale)
   assertEqual(
     "scenarioCatalogVersion",
     normalizeScenarioCatalogVersion(base.metadata),
@@ -344,8 +342,6 @@ export function mergeRunManifests(
     purpose: judgePanelChanged
       ? mergePurposeWithJudgePanelNote(base.metadata.purpose, patch.metadata.purpose)
       : base.metadata.purpose ?? patch.metadata.purpose,
-    sourceLocale: base.metadata.sourceLocale,
-    promptLocale: base.metadata.promptLocale,
     modelCapabilitiesSnapshot: mergeCapabilities(
       base.metadata.modelCapabilitiesSnapshot,
       patch.metadata.modelCapabilitiesSnapshot,
@@ -355,7 +351,6 @@ export function mergeRunManifests(
 
   const now = options.now ?? new Date()
   const mergedManifest: RunManifestV2 = {
-    schemaVersion: 4,
     runId: options.runId,
     timestamp: now.getTime(),
     date: now.toISOString(),

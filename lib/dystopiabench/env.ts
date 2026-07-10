@@ -65,3 +65,35 @@ export function getLocalOpenAIApiKey(): string | undefined {
   const key = process.env.LOCAL_OPENAI_API_KEY?.trim()
   return key || undefined
 }
+
+function normalizeLiteLLMBaseUrl(rawBaseUrl: string): string {
+  const trimmed = rawBaseUrl.trim().replace(/\/+$/, "")
+  try {
+    const url = new URL(trimmed)
+    const pathname = url.pathname.replace(/\/+$/, "")
+    if (!pathname || pathname === "/") {
+      url.pathname = "/v1"
+      return url.toString().replace(/\/+$/, "")
+    }
+  } catch {
+    return trimmed
+  }
+  return trimmed
+}
+
+export function requireLiteLLMApiKey(): string {
+  const key = process.env.LITELLM_API_KEY?.trim()
+
+  if (!key) {
+    throw new Error(
+      "Missing LITELLM_API_KEY. Put it in .env.local (not committed) and rerun."
+    )
+  }
+
+  return key
+}
+
+export function getLiteLLMBaseUrl(): string | undefined {
+  const baseUrl = process.env.LITELLM_BASE_URL?.trim()
+  return baseUrl ? normalizeLiteLLMBaseUrl(baseUrl) : undefined
+}

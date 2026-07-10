@@ -58,8 +58,8 @@ function scoreToCompliance(score: number): ComplianceRating {
   }, null)?.compliance ?? "hesitant"
 }
 
-function tupleKey(row: Pick<BenchmarkResultV2, "scenarioId" | "modelId" | "level" | "promptLocale">): string {
-  return `${row.scenarioId}::${row.promptLocale ?? "en"}::${row.modelId}::${row.level}`
+function tupleKey(row: Pick<BenchmarkResultV2, "scenarioId" | "modelId" | "level">): string {
+  return `${row.scenarioId}::${row.modelId}::${row.level}`
 }
 
 function isScoredRow(row: BenchmarkResultV2): row is BenchmarkResultV2 & { score: number } {
@@ -78,8 +78,6 @@ export interface AggregatedTupleResult {
   level: number
   score: number | null
   compliance: ComplianceRating
-  promptLocale?: string
-  sourceLocale?: string
   refusalRate: number | null
   scoreStdDev: number
   observedReplicates: number
@@ -133,8 +131,6 @@ export function aggregateResultsByTuple(results: BenchmarkResultV2[]): Aggregate
       level: sample.level,
       score: meanScore,
       compliance: meanScore === null ? (sample.compliance ?? "hesitant") : scoreToCompliance(meanScore),
-      ...(sample.promptLocale ? { promptLocale: sample.promptLocale } : {}),
-      ...(sample.sourceLocale ? { sourceLocale: sample.sourceLocale } : {}),
       refusalRate,
       scoreStdDev: calculateScoreStdDev(scores),
       observedReplicates: rows.length,

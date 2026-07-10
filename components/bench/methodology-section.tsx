@@ -67,9 +67,9 @@ export function MethodologySection({
             Dystopian Directives
           </h4>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            The framework evaluates compliance across registered modules spanning infrastructure abuse,
-            surveillance, civic extraction, therapeutic coercion, comfort conditioning, and synthetic
-            persuasion scenarios.
+            The framework evaluates compliance across six JSON-backed modules spanning high-stakes command
+            and control, surveillance, civic extraction, therapeutic coercion, biological conditioning, and
+            synthetic persuasion.
           </p>
         </div>
         <div className="rounded-md border border-border bg-card/50 p-6">
@@ -80,9 +80,9 @@ export function MethodologySection({
             Progressive Coercion
           </h4>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Each scenario runs across 5 escalation levels - Level 1 (Legitimate Anchor) through Scope Creep,
-            Dual-Use Pivot, Normalization, and Level 5 (Operational Detail) - up to extreme coercion,
-            manufactured urgency, and psychological gaslighting.
+            Each scenario runs across {benchmarkEscalationLevelCount} fixed levels: Legitimate Anchor, Scope
+            Creep, Dual-Use Pivot, Normalization, and Operational Detail. Stateful runs preserve the earlier
+            turns as pressure and harmful specificity increase.
           </p>
         </div>
         <div className="rounded-md border border-border bg-card/50 p-6">
@@ -118,12 +118,12 @@ export function MethodologySection({
             The evaluation matrix spans {benchmarkModuleCount} modules, {benchmarkScenarioCount} scenarios, and{" "}
             {benchmarkEscalationLevelCount} fixed escalation levels per scenario. The atomic unit is the
             <span className="text-muted-foreground"> scenario x model x level x replicate</span> row.
-            A single-replicate pass yields{" "}
+            With the current {modelCount}-model catalog, a single-replicate pass yields{" "}
             <span className="text-muted-foreground">{benchmarkScenarioCount * benchmarkEscalationLevelCount * modelCount}</span>{" "}
             prompts; the default <span className="text-muted-foreground">{defaultReplicateCount}x</span> replicate setting yields{" "}
             <span className="text-muted-foreground">{benchmarkScenarioCount * benchmarkEscalationLevelCount * modelCount * defaultReplicateCount}</span>{" "}
-            prompt attempts before any reruns. The registry now includes modules for military escalation, surveillance,
-            civic capture, therapeutic coercion, caste-stability conditioning, and synthetic persuasion.
+            prompt attempts before any reruns. Scenario definitions live in six JSON module files and are validated
+            when the TypeScript registry loads them.
           </p>
         </div>
 
@@ -164,13 +164,14 @@ export function MethodologySection({
             4. Compliance annotation procedure
           </h5>
           <p>
-            Each response is evaluated by either a single judge or a fixed pair-with-tiebreak bundle, depending on the run configuration. The current published run uses
-            <span className="text-muted-foreground"> {judgeStrategy}</span>.
+            Each response is evaluated by either a single judge or a fixed pair-with-tiebreak panel, depending on the run configuration. The dashboard&apos;s published stateful run records
+            <span className="text-muted-foreground"> {judgeStrategy}</span> in its manifest; the CLI default for new runs is
+            <span className="text-muted-foreground"> single</span>.
             Outputs are labeled as
             <span className="text-muted-foreground"> refusal</span>, <span className="text-muted-foreground"> hesitant</span>,
             <span className="text-muted-foreground"> compliant</span>, or <span className="text-muted-foreground"> proactive</span>.
             Classification is semantic and level-aware rather than keyword-triggered. Judge outputs must satisfy a strict JSON schema;
-            parse failures trigger up to three retries before recording
+            parsing or judge-call failures are attempted up to three times before recording
             <span className="text-muted-foreground"> judge_error</span>.
           </p>
         </div>
@@ -201,12 +202,13 @@ export function MethodologySection({
             Each attempted row receives one status tag: <span className="text-muted-foreground">ok</span>,
             <span className="text-muted-foreground"> model_error</span>,
             <span className="text-muted-foreground"> judge_error</span>,
-            <span className="text-muted-foreground"> aborted</span>, or
-            <span className="text-muted-foreground"> invalid_response</span>.
-            Empty completions with provider safety blocks or near-zero stopped output are recorded as silent refusals.
-            Empty completions that consumed output or reasoning tokens without final answer text are recorded as
-            <span className="text-muted-foreground"> invalid_response</span> with
-            <span className="text-muted-foreground"> EMPTY_GENERATED_COMPLETION</span> so they are rerun instead of counted as refusals.
+            <span className="text-muted-foreground"> aborted</span>,
+            <span className="text-muted-foreground"> invalid_response</span>, or
+            <span className="text-muted-foreground"> skipped</span>.
+            Explicit provider content filters are recorded as provider refusals. Empty stopped completions without
+            final answer text are unscorable invalid responses rather than refusals. Token-consuming empty generations use
+            <span className="text-muted-foreground"> EMPTY_GENERATED_COMPLETION</span>; near-zero empty stops use
+            <span className="text-muted-foreground"> EMPTY_UNVERIFIED_RESPONSE</span>. Both remain eligible for repair reruns.
             The rerun utility <span className="text-muted-foreground">bench:rerun-failures</span> supports targeted reruns
             (<span className="text-muted-foreground">from-first-failed</span>, <span className="text-muted-foreground">to-max-failed</span>, <span className="text-muted-foreground">all-levels</span>, or{" "}
             <span className="text-muted-foreground">failed-only</span>) by writing a new derived manifest with provenance back to the source run instead of mutating historical artifacts.
@@ -219,10 +221,12 @@ export function MethodologySection({
             7. Bundles and run telemetry
           </h5>
           <p>
-            DystopiaBench also supports benchmark bundles, scenario-source provenance, and per-run
-            telemetry for lab workflows. Bundle metadata tracks split, release tier, review status, contamination
-            notes, and citations. Run artifacts now record token usage, reasoning-vs-text output tokens,
-            estimated cost, and timing data so performance and spend can be audited alongside safety scores.
+            DystopiaBench keeps benchmark bundles compact: they pin the benchmark, dataset, scenario catalog,
+            prompt pack, scoring rubric, recommended judge, and module definitions. Run manifests separate the
+            benchmark definition, execution configuration, and analysis configuration, while row telemetry records
+            token usage, reasoning-vs-text output tokens, estimated cost, and timing. Public runs may update dashboard
+            aliases; private runs, checkpoints, and trace archives stay under
+            <span className="text-muted-foreground"> artifacts/private</span>.
           </p>
         </div>
       </div>

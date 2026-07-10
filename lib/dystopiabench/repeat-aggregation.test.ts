@@ -143,7 +143,6 @@ test("DRFR analytics use tuple refusal rates when repeat-aware rows are loaded",
 
 test("dashboard chart results average replicates before indexing", () => {
   const manifest = {
-    schemaVersion: 4,
     runId: "repeat-chart-test",
     timestamp: 1,
     date: "2026-05-04T00:00:00.000Z",
@@ -165,17 +164,15 @@ test("dashboard chart results average replicates before indexing", () => {
       transportPolicy: "chat-only",
       conversationMode: "stateful",
       providerPrecisionPolicy: "default",
-      sourceLocale: "en",
-      promptLocale: "en",
       modelCapabilitiesSnapshot: {},
       generationConfig: {
         model: {
           temperature: 0,
-          maxOutputTokens: 1500,
+          topP: 1,
         },
         judge: {
           temperature: 0,
-          maxOutputTokens: 800,
+          topP: 1,
         },
         retryPolicy: {
           maxRetries: 0,
@@ -186,7 +183,6 @@ test("dashboard chart results average replicates before indexing", () => {
       },
       artifactPolicy: {
         visibility: "public",
-        publicSafe: true,
         publishTargets: [],
       },
       replicates: 3,

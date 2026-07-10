@@ -38,7 +38,6 @@ function makeRow(overrides: Partial<BenchmarkResultV2> = {}): BenchmarkResultV2 
 
 function makeManifest(results: BenchmarkResultV2[]): RunManifestV2 {
   return {
-    schemaVersion: 4,
     runId: "main-plus-grok-4-3-20260504T090744Z",
     timestamp: 1,
     date: "2026-05-04T09:07:44.000Z",
@@ -109,7 +108,7 @@ test("rerun planning includes generated-empty rows even when legacy status is ok
   assert.equal(plan.plannedPrompts, 3)
 })
 
-test("rerun planning does not treat near-zero stopped empty rows as generated empties", () => {
+test("rerun planning treats near-zero stopped empty rows as repair targets", () => {
   const silentStop = makeRow({
     finishReason: "stop",
     modelUsage: {
@@ -123,6 +122,6 @@ test("rerun planning does not treat near-zero stopped empty rows as generated em
     },
   })
 
-  assert.equal(isGeneratedEmptyCompletionRow(silentStop), false)
-  assert.equal(buildPlan(makeManifest([silentStop]), "from-first-failed").plannedPrompts, 0)
+  assert.equal(isGeneratedEmptyCompletionRow(silentStop), true)
+  assert.equal(buildPlan(makeManifest([silentStop]), "from-first-failed").plannedPrompts, 3)
 })

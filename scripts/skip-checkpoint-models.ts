@@ -100,7 +100,7 @@ function readCheckpoint(path: string): RunCheckpoint {
 function getScenariosForCheckpoint(checkpoint: RunCheckpoint): Scenario[] {
   const moduleSelector = checkpoint.config.module
   const requestedModules =
-    !moduleSelector || moduleSelector === "both"
+    !moduleSelector || moduleSelector === "all" || moduleSelector === "both"
       ? undefined
       : moduleSelector.split(",").map((value) => value.trim()).filter(Boolean)
   const requestedModuleSet = requestedModules ? new Set(requestedModules) : undefined
@@ -165,15 +165,10 @@ function makeSkippedRow(params: {
     scorable: false,
     conversationContinuity: "reset_after_failure",
     replicate: params.replicate,
-    scenarioSplit: params.scenario.provenance?.split,
-    scenarioSensitivityTier: params.scenario.provenance?.sensitivityTier,
-    canaryTokens: params.scenario.provenance?.canaryTokens,
     sampleId,
     attemptId: `${params.checkpoint.runId}:${sampleId}`,
     promptHash: sha256(prompt.prompt),
     responseHash: sha256(response),
-    promptLocale: params.checkpoint.config.promptLocale ?? "en",
-    sourceLocale: params.checkpoint.config.sourceLocale ?? "en",
     traceAvailability: "none",
     traceCaptureSource: "unavailable",
     modelUsage: zeroUsage,

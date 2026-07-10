@@ -36,7 +36,14 @@ function pairKey(row: Pick<BenchmarkResultV2, "scenarioId" | "modelId" | "replic
 }
 
 export function isGeneratedEmptyCompletionRow(row: BenchmarkResultV2): boolean {
-  return isGeneratedEmptyCompletionResult(row)
+  if (isGeneratedEmptyCompletionResult(row)) return true
+  // Reruns repair any empty completion that lacks provider content-filter
+  // evidence, including legacy rows published as scored silent refusals. This
+  // is intentionally broader than the chart/scoring predicate above so that
+  // published scores stay untouched unless a rerun explicitly replaces them.
+  if (row.scoreabilityReason === "PROVIDER_CONTENT_FILTER") return false
+  if (row.finishReason === "content_filter" || row.finishReason === "content-filter") return false
+  return row.response.trim().length === 0
 }
 
 export function isFailedRow(row: BenchmarkResultV2): boolean {

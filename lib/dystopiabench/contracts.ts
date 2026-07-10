@@ -28,7 +28,6 @@ export const benchmarkDefinitionSchema = z.object({
   promptPackVersion: z.string().default("dystopiabench-prompts-v2"),
   recommendedJudgeModel: z.string().optional(),
   recommendedJudgeStrategy: judgeStrategySchema.default("single"),
-  releaseTier: z.enum(["core-public", "holdout", "partner-only", "organization-local"]).default("core-public"),
 })
 
 export const executionConfigSchema = z.object({
@@ -62,11 +61,6 @@ export const experimentMetadataSchema = z.object({
   customPrepromptUsed: z.boolean().optional(),
   gitCommit: z.string().optional(),
   datasetBundleVersion: z.string().optional(),
-  promptLocale: z.string().optional(),
-  sourceLocale: z.string().optional(),
-  localePack: z.unknown().optional(),
-  localePackId: z.string().optional(),
-  localePreset: z.string().optional(),
 })
 
 export const benchmarkPolicyConfigSchema = benchmarkPolicyConfigV1Schema
@@ -74,7 +68,7 @@ export const benchmarkPolicyConfigSchema = benchmarkPolicyConfigV1Schema
 export const runRequestV1Schema = z.object({
   runId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).optional(),
   benchmarkBundle: benchmarkBundleSchema.optional(),
-  module: z.string().default("both"),
+  module: z.string().default("all"),
   modelIds: z.array(z.string()).min(1),
   levels: z.array(z.number().int().min(1).max(5)).min(1).default([1, 2, 3, 4, 5]),
   scenarioIds: z.array(z.string()).optional(),
@@ -98,11 +92,6 @@ export const runRequestV1Schema = z.object({
   customPrepromptUsed: z.boolean().optional(),
   gitCommit: z.string().optional(),
   datasetBundleVersion: z.string().optional(),
-  promptLocale: z.string().optional(),
-  sourceLocale: z.string().optional(),
-  localePack: z.unknown().optional(),
-  localePackId: z.string().optional(),
-  localePreset: z.string().optional(),
   policyConfig: benchmarkPolicyConfigV1Schema.optional(),
   scenarioSources: z
     .array(
@@ -111,7 +100,6 @@ export const runRequestV1Schema = z.object({
         z.object({
           source: z.string(),
           namespace: z.string().optional(),
-          releaseTier: z.enum(["core-public", "holdout", "partner-only", "organization-local"]).optional(),
           author: z.string().optional(),
         }),
       ]),
@@ -137,8 +125,6 @@ export const scenarioResultSummaryV1Schema = z.object({
   category: z.string(),
   modelId: z.string(),
   provider: z.string(),
-  promptLocale: z.string().optional(),
-  sourceLocale: z.string().optional(),
   scoredPrompts: z.number().int().nonnegative(),
   averageDcs: z.number().min(0).max(100),
   variance: z.number().nonnegative(),
@@ -148,23 +134,6 @@ export const scenarioResultSummaryV1Schema = z.object({
   l1L2AverageDcs: z.number().min(0).max(100).nullable(),
   l3L5AverageDcs: z.number().min(0).max(100).nullable(),
   okRate: z.number().min(0).max(100),
-})
-
-export const judgeCalibrationExampleSchema = z.object({
-  id: z.string(),
-  scenarioId: z.string(),
-  prompt: z.string(),
-  response: z.string(),
-  goldLabel: complianceRatingSchema,
-  slice: z.string().optional(),
-  notes: z.string().optional(),
-})
-
-export const judgeCalibrationSetSchema = z.object({
-  id: z.string(),
-  version: z.string(),
-  createdAt: z.string(),
-  examples: z.array(judgeCalibrationExampleSchema).min(1),
 })
 
 export const gateAssertionSchema = z.object({
@@ -192,7 +161,6 @@ export type BenchmarkPolicyConfigV1 = z.infer<typeof benchmarkPolicyConfigV1Sche
 export type RunRequestV1 = z.infer<typeof runRequestV1Schema>
 export type ScenarioCatalogV1 = z.infer<typeof scenarioCatalogV1Schema>
 export type ScenarioResultSummaryV1 = z.infer<typeof scenarioResultSummaryV1Schema>
-export type JudgeCalibrationSet = z.infer<typeof judgeCalibrationSetSchema>
 export type GateConfig = z.infer<typeof gateConfigSchema>
 export type RunExportManifest = z.infer<typeof runExportManifestSchema>
 export type BenchmarkBundleV1 = z.infer<typeof benchmarkBundleSchema>
@@ -209,28 +177,10 @@ export function validateGateConfig(value: unknown): GateConfig {
   return gateConfigSchema.parse(value)
 }
 
-export function validateJudgeCalibrationSet(value: unknown): JudgeCalibrationSet {
-  return judgeCalibrationSetSchema.parse(value)
-}
-
-export function createEmptyConfusionMatrix(): Record<string, Record<string, number>> {
-  return {
-    refusal: { refusal: 0, hesitant: 0, compliant: 0, proactive: 0 },
-    hesitant: { refusal: 0, hesitant: 0, compliant: 0, proactive: 0 },
-    compliant: { refusal: 0, hesitant: 0, compliant: 0, proactive: 0 },
-    proactive: { refusal: 0, hesitant: 0, compliant: 0, proactive: 0 },
-  }
-}
-
-export function computeAgreementPercentage(correct: number, total: number): number {
-  if (total === 0) return 100
-  return Number(((correct / total) * 100).toFixed(2))
-}
-
 export function summarizeScenarioResults(results: BenchmarkResultV2[]): ScenarioResultSummaryV1[] {
   const grouped = new Map<string, BenchmarkResultV2[]>()
   for (const row of results) {
-    const key = `${row.scenarioId}::${row.promptLocale ?? "en"}::${row.modelId}`
+    const key = `${row.scenarioId}::${row.modelId}`
     const existing = grouped.get(key)
     if (existing) {
       existing.push(row)
@@ -260,8 +210,6 @@ export function summarizeScenarioResults(results: BenchmarkResultV2[]): Scenario
       category: rows[0].scenarioCategory,
       modelId: rows[0].modelId,
       provider: rows[0].provider,
-      promptLocale: rows[0].promptLocale,
-      sourceLocale: rows[0].sourceLocale,
       scoredPrompts: scoredRows.length,
       averageDcs: Number(average.toFixed(2)),
       variance: Number(variance.toFixed(4)),

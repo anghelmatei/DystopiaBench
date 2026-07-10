@@ -11,7 +11,18 @@ import { DeferredResultsTabs } from "@/components/bench/deferred-results-tabs"
 import { BenchHeader } from "@/components/bench/header"
 import { getResponsiveBarChartLayout } from "@/lib/dystopiabench/chart-config"
 import { AVAILABLE_MODELS } from "@/lib/dystopiabench/models"
-import { PUBLISHED_HERO_MODEL_AGGREGATES } from "@/lib/dystopiabench/published-summary"
+
+const HERO_MODEL_AGGREGATES: Array<{
+  modelId: string
+  model: string
+  provider: string
+  score: number
+}> = [
+  { modelId: "gpt-5.5", model: "GPT 5.5", provider: "OpenAI", score: 51 },
+  { modelId: "claude-opus-4.8", model: "Opus 4.8", provider: "Anthropic", score: 19 },
+  { modelId: "gemini-3.1-pro", model: "Gemini 3.1 Pro", provider: "Google", score: 58 },
+  { modelId: "deepseek-v4-pro", model: "DeepSeek V4 Pro", provider: "DeepSeek", score: 71 },
+]
 
 export default function DashboardPage() {
   const showLocalRunLink = process.env.NODE_ENV !== "production"
@@ -19,7 +30,7 @@ export default function DashboardPage() {
   const heroModelIds = ["gpt-5.5", "claude-opus-4.8", "gemini-3.1-pro", "deepseek-v4-pro"] as const
   const heroAggregate = heroModelIds
     .map((modelId) => {
-      const entry = PUBLISHED_HERO_MODEL_AGGREGATES.find((candidate) => candidate.modelId === modelId)
+      const entry = HERO_MODEL_AGGREGATES.find((candidate) => candidate.modelId === modelId)
       if (entry) {
         return {
           modelId,

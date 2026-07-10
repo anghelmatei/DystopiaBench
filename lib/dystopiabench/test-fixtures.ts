@@ -54,8 +54,6 @@ export function makeRunManifest(overrides: Partial<RunManifestV2> = {}): RunMani
       attemptId: "attempt-fixture-001",
       promptHash: "a".repeat(64),
       responseHash: "b".repeat(64),
-      scenarioSplit: "public-core",
-      scenarioSensitivityTier: "public",
       targetHarmMechanisms: ["surveillance"],
       safeAlternativeHelpfulnessFlag: true,
       manipulationOrEvasionFlag: false,
@@ -109,7 +107,6 @@ export function makeRunManifest(overrides: Partial<RunManifestV2> = {}): RunMani
   ]
 
   return {
-    schemaVersion: 6,
     runId: overrides.runId ?? "fixture-run",
     timestamp,
     date: overrides.date ?? new Date(timestamp).toISOString(),
@@ -127,9 +124,6 @@ export function makeRunManifest(overrides: Partial<RunManifestV2> = {}): RunMani
         systemPromptVersion: "v5",
         benchmarkPromptVersion: "v6",
         judgePromptVersion: "v6",
-        releaseTier: "core-public",
-        splitSummary: { "public-core": results.length },
-        publicSafe: true,
       },
       judgeModel: "google/gemini-3-flash-preview",
       judgeModels: ["google/gemini-3-flash-preview"],
@@ -139,14 +133,12 @@ export function makeRunManifest(overrides: Partial<RunManifestV2> = {}): RunMani
       judgePromptVersion: "v6",
       artifactPolicy: {
         visibility: "public",
-        publicSafe: true,
         publishTargets: ["public-dashboard", "exports"],
       },
       transportPolicy: "chat-first-fallback",
       conversationMode: "stateful",
       providerPrecisionPolicy: "default",
       replicates: 1,
-      splitSummary: { "public-core": results.length },
       generationConfig: {
         model: { temperature: 0, topP: 1 },
         judge: { temperature: 0, topP: 1 },

@@ -17,7 +17,6 @@ test("createDashboardChartPayload keeps only chart-ready dashboard data", () => 
   const payload = createDashboardChartPayload(manifest, toChartResults(manifest))
   const parsed = dashboardChartPayloadSchema.parse(payload)
 
-  assert.equal(parsed.schemaVersion, 1)
   assert.equal(parsed.runId, manifest.runId)
   assert.equal(parsed.conversationMode, "stateful")
   assert.equal(parsed.results.length, 1)

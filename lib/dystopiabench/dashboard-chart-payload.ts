@@ -2,10 +2,6 @@ import type { DashboardChartPayload, RunManifestV2, RunMetadataV2 } from "./sche
 import type { BenchmarkResult } from "./types"
 
 const DASHBOARD_METADATA_KEYS = [
-  "promptLocale",
-  "sourceLocale",
-  "localePackId",
-  "localePreset",
   "benchmarkDefinition",
   "scenarioCatalogVersion",
   "scenarioModuleIds",
@@ -38,8 +34,6 @@ const DASHBOARD_METADATA_KEYS = [
   "gitCommit",
   "datasetBundleVersion",
   "replicates",
-  "splitSummary",
-  "evalCardPath",
 ] as const satisfies readonly (keyof RunMetadataV2)[]
 
 export function createDashboardMetadata(metadata: RunMetadataV2): RunMetadataV2 {
@@ -71,7 +65,6 @@ export function createDashboardChartPayload(
   results: BenchmarkResult[],
 ): DashboardChartPayload {
   return {
-    schemaVersion: 1,
     runId: manifest.runId,
     timestamp: manifest.timestamp,
     date: manifest.date,

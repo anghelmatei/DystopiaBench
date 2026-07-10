@@ -8,9 +8,8 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs"
-import { basename, dirname, join } from "node:path"
+import { basename, dirname, join, relative } from "node:path"
 import { createDashboardChartPayload, createDashboardMetadata } from "./dashboard-chart-payload"
-import { createEvalCard } from "./eval-card"
 import { toChartResults } from "./load-results"
 import type { RunIndexItemV2, RunManifestV2 } from "./schemas"
 import { runIndexV2Schema, runManifestV2Schema } from "./schemas"
@@ -71,10 +70,20 @@ function ensurePrivateArtifactDir() {
   return ensureDir(getPrivateArtifactDir())
 }
 
-function getEvalCardDir(visibility: "public" | "private"): string {
-  return visibility === "public"
-    ? join(getPublicDataDir(), "eval-cards")
-    : join(getPrivateArtifactDir(), "eval-cards")
+export function validatePrivateArtifactDir(input: string): string {
+  const trimmed = input.trim()
+  if (!trimmed) {
+    throw new Error("Invalid private artifact directory. Provide a non-empty relative folder name.")
+  }
+  if (
+    trimmed.includes("..") ||
+    trimmed.startsWith("/") ||
+    trimmed.startsWith("\\") ||
+    /^[A-Za-z]:/.test(trimmed)
+  ) {
+    throw new Error("Invalid private artifact directory. Use a relative folder under artifacts/private.")
+  }
+  return trimmed
 }
 
 function writeJsonAtomic(filePath: string, value: unknown) {
@@ -103,21 +112,23 @@ function readRunIndex(indexPath: string): RunIndexItemV2[] {
 export interface RetentionOptions {
   retainRuns?: number
   archiveDir?: string
-  allowNonPublicPublish?: boolean
+}
+
+export interface WriteRunManifestOptions {
+  privateArtifactDir?: string
+}
+
+export interface WrittenRunManifest {
+  runPath: string
+  relativeRunPath: string
 }
 
 export function isPublicBenchmarkRun(manifest: RunManifestV2): boolean {
-  return (
-    manifest.metadata.artifactPolicy?.visibility === "public" ||
-    (
-      manifest.metadata.artifactPolicy?.visibility === undefined &&
-      (manifest.metadata.benchmarkDefinition?.releaseTier ?? "core-public") === "core-public"
-    )
-  )
+  return resolveArtifactVisibility(manifest) === "public"
 }
 
 function resolveArtifactVisibility(manifest: RunManifestV2): "public" | "private" {
-  return manifest.metadata.artifactPolicy?.visibility ?? (isPublicBenchmarkRun(manifest) ? "public" : "private")
+  return manifest.metadata.artifactPolicy?.visibility ?? "public"
 }
 
 function sortNewestFirst(runs: RunIndexItemV2[]): RunIndexItemV2[] {
@@ -154,24 +165,36 @@ function pruneRunFiles(index: RunIndexItemV2[], dataDir: string, options: Retent
   return kept
 }
 
-export function writeRunManifest(manifest: RunManifestV2) {
+export function writeRunManifest(
+  manifest: RunManifestV2,
+  options: WriteRunManifestOptions = {},
+): WrittenRunManifest {
   const visibility = resolveArtifactVisibility(manifest)
-  const dataDir = visibility === "public" ? ensureDataDir() : join(ensurePrivateArtifactDir(), "runs")
+  const privateArtifactDir = options.privateArtifactDir
+    ? validatePrivateArtifactDir(options.privateArtifactDir)
+    : undefined
+  const dataDir = privateArtifactDir
+    ? join(ensurePrivateArtifactDir(), privateArtifactDir)
+    : visibility === "public"
+      ? ensureDataDir()
+      : join(ensurePrivateArtifactDir(), "runs")
   ensureDir(dataDir)
-  const evalCardDir = ensureDir(getEvalCardDir(visibility))
   manifest.metadata.artifactPolicy ??= {
-    visibility,
-    publicSafe: visibility === "public",
+    visibility: privateArtifactDir ? "private" : visibility,
     publishTargets: visibility === "public" ? ["public-dashboard", "exports"] : ["private-artifacts", "exports"],
-    publicPublishBlockedReason: visibility === "public" ? undefined : "Artifact contains non-public benchmark content.",
   }
-  manifest.metadata.evalCardPath ??=
-    visibility === "public"
-      ? join("public", "data", "eval-cards", `eval-card-${manifest.runId}.json`)
-      : join("artifacts", "private", "eval-cards", `eval-card-${manifest.runId}.json`)
+  if (privateArtifactDir) {
+    manifest.metadata.artifactPolicy = {
+      visibility: "private",
+      publishTargets: ["private-artifacts", "exports"],
+    }
+  }
   const runPath = join(dataDir, `benchmark-${manifest.runId}.json`)
   writeJsonAtomic(runPath, manifest)
-  writeJsonAtomic(join(evalCardDir, `eval-card-${manifest.runId}.json`), createEvalCard(manifest))
+  return {
+    runPath,
+    relativeRunPath: relative(process.cwd(), runPath),
+  }
 }
 
 export function resolveRunManifestPath(runId: string): string {
@@ -196,14 +219,9 @@ export function readRunManifest(runId: string): RunManifestV2 {
 }
 
 export function publishLatest(manifest: RunManifestV2, options: RetentionOptions = {}) {
-  if (!options.allowNonPublicPublish && !isPublicBenchmarkRun(manifest)) {
+  if (!isPublicBenchmarkRun(manifest)) {
     throw new Error(
-      "Refusing to publish non-public benchmark content. Pass allowNonPublicPublish to override intentionally."
-    )
-  }
-  if (options.allowNonPublicPublish && manifest.metadata.artifactPolicy?.publicSafe !== true) {
-    throw new Error(
-      "Refusing to publish artifact to public aliases because it is not explicitly marked public-safe."
+      "Refusing to publish private artifact. Only public runs can update dashboard aliases."
     )
   }
 

@@ -51,6 +51,8 @@ test("isChartableManifestResult accepts only explicitly scorable scored rows", (
       totalTokens: 1510,
     },
   })), false)
+  // Legacy silent-refusal rows in published manifests stay chartable so
+  // historical results are not rescored at render time.
   assert.equal(isChartableManifestResult(makeResult({
     response: "",
     errorCode: "EMPTY_MODEL_RESPONSE",
@@ -67,10 +69,10 @@ test("isChartableManifestResult accepts only explicitly scorable scored rows", (
   })), true)
 })
 
-test("isActiveManifestResult rejects temporarily disabled modules and unknown scenarios", () => {
+test("isActiveManifestResult rejects unknown modules and scenarios", () => {
   assert.equal(isActiveManifestResult(makeResult()), true)
-  assert.equal(isActiveManifestResult(makeResult({ module: "kafka" })), false)
-  assert.equal(isActiveManifestResult(makeResult({ scenarioId: "kafka-01" })), false)
+  assert.equal(isActiveManifestResult(makeResult({ module: "retired-module" })), false)
+  assert.equal(isActiveManifestResult(makeResult({ scenarioId: "retired-01" })), false)
   assert.equal(isActiveManifestResult(makeResult({ scenarioId: "not-in-catalog" })), false)
 })
 
@@ -78,7 +80,7 @@ test("filterChartableManifestResults keeps only active chartable rows", () => {
   const manifest = {
     results: [
       makeResult({ scenarioId: "petrov-01", module: "petrov", score: 33 }),
-      makeResult({ scenarioId: "kafka-01", module: "kafka", score: 66 }),
+      makeResult({ scenarioId: "retired-01", module: "retired-module", score: 66 }),
       makeResult({ scenarioId: "petrov-02", module: "petrov", scorable: false }),
     ],
   } as RunManifestV2

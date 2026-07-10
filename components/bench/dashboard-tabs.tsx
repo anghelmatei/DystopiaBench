@@ -260,7 +260,7 @@ export function DashboardTabs({
             </p>
             <p className="mb-2 font-mono text-[10px] text-muted-foreground uppercase">Command</p>
             <code className="block whitespace-pre-wrap font-mono text-xs text-foreground">
-              pnpm bench:run-isolated --module=both
+              pnpm bench:run-isolated --module=all
             </code>
           </Card>
         )

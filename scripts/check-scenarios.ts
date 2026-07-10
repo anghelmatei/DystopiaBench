@@ -83,23 +83,8 @@ function main() {
         warnings.push(`${scenario.id}: one or more escalation prompts may be too short for realistic context.`)
       }
 
-      if (!scenario.provenance?.sourceType || !scenario.provenance?.releaseTier) {
-        warnings.push(`${scenario.id}: provenance metadata is missing sourceType or releaseTier.`)
-      }
-      if (!scenario.provenance?.split) {
-        warnings.push(`${scenario.id}: provenance metadata is missing split.`)
-      }
-      if (scenario.provenance?.split && scenario.provenance.split !== "public-core") {
-        const hasReviewMetadata =
-          Boolean(scenario.provenance.annotationRubricVersion) &&
-          (scenario.provenance.reviewers?.length ?? 0) > 0 &&
-          (scenario.provenance.citations?.length ?? 0) > 0
-        if (!hasReviewMetadata) {
-          errors.push(`${scenario.id}: non-public/non-core split requires review metadata.`)
-        }
-      }
-      if (scenario.provenance?.canaryTokens && scenario.provenance.canaryTokens.length > 0) {
-        warnings.push(`${scenario.id}: contains canary tokens and should remain in internal artifact flows.`)
+      if (!scenario.provenance?.sourceType) {
+        warnings.push(`${scenario.id}: provenance metadata is missing sourceType.`)
       }
 
       const l1Length = scenario.escalationPrompts[0]?.prompt.length ?? 0

@@ -1,13 +1,10 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { basename, join } from "node:path"
-import { evalCardSchema } from "../lib/dystopiabench/eval-card"
 import { assertRunQuality } from "../lib/dystopiabench/quality"
 import { dashboardChartPayloadSchema, runIndexV2Schema, runManifestV2Schema } from "../lib/dystopiabench/schemas"
 
 const PUBLIC_DATA_DIR = join(process.cwd(), "public", "data")
 const PRIVATE_RUN_DIR = join(process.cwd(), "artifacts", "private", "runs")
-const PUBLIC_EVAL_CARD_DIR = join(process.cwd(), "public", "data", "eval-cards")
-const PRIVATE_EVAL_CARD_DIR = join(process.cwd(), "artifacts", "private", "eval-cards")
 
 function listJsonFiles(root: string): string[] {
   if (!existsSync(root)) return []
@@ -31,11 +28,6 @@ function validateJsonFile(path: string): string | null {
     return validated.success ? null : `${path}: invalid run index`
   }
 
-  if (fileName.startsWith("eval-card-")) {
-    const validated = evalCardSchema.safeParse(parsedJson)
-    return validated.success ? null : `${path}: invalid eval card`
-  }
-
   if (fileName.endsWith(".chart.json")) {
     const validated = dashboardChartPayloadSchema.safeParse(parsedJson)
     return validated.success ? null : `${path}: invalid dashboard chart payload`
@@ -55,7 +47,7 @@ function validateJsonFile(path: string): string | null {
 }
 
 function main() {
-  const roots = [PUBLIC_DATA_DIR, PRIVATE_RUN_DIR, PUBLIC_EVAL_CARD_DIR, PRIVATE_EVAL_CARD_DIR]
+  const roots = [PUBLIC_DATA_DIR, PRIVATE_RUN_DIR]
   const existingRoots = roots.filter((root) => existsSync(root) && statSync(root).isDirectory())
 
   if (existingRoots.length === 0) {

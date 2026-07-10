@@ -3,7 +3,7 @@ import { join } from "node:path"
 import { createOpenAI } from "@ai-sdk/openai"
 import { OpenRouter } from "@openrouter/sdk"
 import pLimit from "p-limit"
-import { runManifestV2Schema, type BenchmarkResultV2, type RunManifestV2, type TokenUsageSummary } from "../lib/dystopiabench/schemas"
+import { GENERATION_CONFIG, runManifestV2Schema, type BenchmarkResultV2, type RunManifestV2, type TokenUsageSummary } from "../lib/dystopiabench/schemas"
 import {
   JUDGE_PROMPT_VERSION,
   buildJudgePanelRecord,
@@ -13,12 +13,22 @@ import {
   type TransportPolicy,
 } from "../lib/dystopiabench/runner"
 import { parseModelIdentifier } from "../lib/dystopiabench/model-selectors"
-import { getDataDir, makeRunId, publishLatest, sanitizeRunId, writeRunManifest } from "../lib/dystopiabench/storage"
 import {
+  getDataDir,
+  getPrivateArtifactDir,
+  makeRunId,
+  publishLatest,
+  sanitizeRunId,
+  validatePrivateArtifactDir,
+  writeRunManifest,
+} from "../lib/dystopiabench/storage"
+import {
+  getLiteLLMBaseUrl,
   getLocalOpenAIApiKey,
   getLocalOpenAIBaseUrl,
   getOpenRouterAppTitle,
   getOpenRouterHttpReferer,
+  requireLiteLLMApiKey,
   requireOpenRouterApiKey,
 } from "../lib/dystopiabench/env"
 
@@ -64,8 +74,17 @@ function parseModelSet(flag: string): Set<string> | undefined {
   return values.length > 0 ? new Set(values) : undefined
 }
 
-function loadManifest(source: Source, runId: string | undefined): { manifest: RunManifestV2; sourcePath: string } {
-  const dataDir = getDataDir()
+function loadManifest(
+  source: Source,
+  runId: string | undefined,
+  privateArtifactDir: string | undefined,
+): { manifest: RunManifestV2; sourcePath: string } {
+  if (privateArtifactDir && source === "latest") {
+    throw new Error("--private-artifact-dir requires --run-id; private runs have no latest alias.")
+  }
+  const dataDir = privateArtifactDir
+    ? join(getPrivateArtifactDir(), privateArtifactDir)
+    : getDataDir()
   const sourcePath =
     source === "latest"
       ? join(dataDir, "benchmark-results.json")
@@ -99,13 +118,15 @@ async function main() {
   const noPublish = hasFlag("--no-publish")
   const dryRun = hasFlag("--dry-run")
   const concurrency = parsePositiveInt("--concurrency", 6)
-  const timeoutMs = parsePositiveInt("--timeout-ms", 120_000)
+  const timeoutMs = parsePositiveInt("--timeout-ms", GENERATION_CONFIG.timeoutMs)
   const includeModels = parseModelSet("--models")
   const excludeModels = parseModelSet("--exclude-models")
   const transportPolicy = parseTransport(parseArg("--transport")) ?? "chat-first-fallback"
   const fallbackOnTimeout = !hasFlag("--no-timeout-fallback")
+  const privateArtifactDirArg = parseArg("--private-artifact-dir")
+  const privateArtifactDir = privateArtifactDirArg ? validatePrivateArtifactDir(privateArtifactDirArg) : undefined
 
-  const { manifest: sourceManifest, sourcePath } = loadManifest(source, requestedRunId)
+  const { manifest: sourceManifest, sourcePath } = loadManifest(source, requestedRunId, privateArtifactDir)
   const judgeStrategy = (sourceManifest.metadata.judgeStrategy ?? "pair-with-tiebreak") as JudgeStrategy
   const judgeModelIds = sourceManifest.metadata.judgeModels ?? [sourceManifest.metadata.judgeModel]
   const judgeModels = judgeModelIds.map((id) => parseModelIdentifier(id))
@@ -150,24 +171,45 @@ async function main() {
     return
   }
 
-  const openRouterApiKey = requireOpenRouterApiKey()
-  const localBaseUrl = getLocalOpenAIBaseUrl()
+  const requiresOpenRouter = judgeModels.some((model) => model.backend === "openrouter")
+  const requiresLocal = judgeModels.some((model) => model.backend === "local")
+  const requiresLiteLLM = judgeModels.some((model) => model.backend === "litellm")
+  const openRouterApiKey = requiresOpenRouter ? requireOpenRouterApiKey() : undefined
+  const localBaseUrl = requiresLocal ? getLocalOpenAIBaseUrl() : undefined
+  const liteLLMApiKey = requiresLiteLLM ? requireLiteLLMApiKey() : undefined
+  const liteLLMBaseUrl = requiresLiteLLM ? getLiteLLMBaseUrl() : undefined
+
+  if (requiresLocal && !localBaseUrl) {
+    throw new Error("Missing LOCAL_OPENAI_BASE_URL. Configure this variable to rescore local judge models.")
+  }
+  if (requiresLiteLLM && !liteLLMBaseUrl) {
+    throw new Error("Missing LITELLM_BASE_URL. Configure this variable to rescore LiteLLM judge models.")
+  }
+
   const apiClients = {
-    openrouter: new OpenRouter({
-      apiKey: openRouterApiKey,
-      httpReferer: getOpenRouterHttpReferer(),
-      appTitle: getOpenRouterAppTitle(),
-      retryConfig: { strategy: "none" },
-    }),
-    local: localBaseUrl
+    openrouter: requiresOpenRouter
+      ? new OpenRouter({
+        apiKey: openRouterApiKey ?? "",
+        httpReferer: getOpenRouterHttpReferer(),
+        appTitle: getOpenRouterAppTitle(),
+        retryConfig: { strategy: "none" },
+      })
+      : undefined,
+    local: requiresLocal && localBaseUrl
       ? createOpenAI({
         apiKey: getLocalOpenAIApiKey(),
         baseURL: localBaseUrl,
       })
       : undefined,
+    litellm: requiresLiteLLM && liteLLMBaseUrl
+      ? {
+        apiKey: liteLLMApiKey ?? "",
+        baseURL: liteLLMBaseUrl,
+      }
+      : undefined,
   }
 
-  writeRunManifest(workingManifest)
+  let writtenManifest = writeRunManifest(workingManifest, { privateArtifactDir })
   const limit = pLimit(concurrency)
   const mergeLimit = pLimit(1)
   let rescored = 0
@@ -252,7 +294,7 @@ async function main() {
             summary: summarizeResults(workingManifest.results),
           }
           rescored += 1
-          writeRunManifest(workingManifest)
+          writtenManifest = writeRunManifest(workingManifest, { privateArtifactDir })
           console.log(
             `[Rescore ${rescored}/${targets.length}] ${target.modelId} ${target.scenarioId} L${target.level} r${target.replicate}: ${judged.compliance} ${judged.score}`
           )
@@ -267,12 +309,14 @@ async function main() {
     })
   ))
 
-  if (!noPublish) {
+  if (!noPublish && !privateArtifactDir) {
     publishLatest(workingManifest)
     console.log("Updated latest: public/data/benchmark-results.json")
+  } else if (privateArtifactDir) {
+    console.log("Private artifact run: latest aliases not updated.")
   }
 
-  console.log(`Derived run file: public/data/benchmark-${workingManifest.runId}.json`)
+  console.log(`Derived run file: ${writtenManifest.relativeRunPath}`)
   console.log(`Judge rescore stats: attempted=${targets.length}, rescored=${rescored}, failed=${failed}`)
   console.log(`Remaining failed rows: ${workingManifest.results.filter((row) => row.scorable !== true).length}`)
 }

@@ -30,8 +30,6 @@ function manifestForModel(
     ...manifest.metadata,
     models: [modelId],
     totalPrompts: results.length,
-    sourceLocale: "en",
-    promptLocale: "en",
     scenarioCatalogVersion: "catalog",
     generationConfig: {
       model: { temperature: 0, topP: 1 },
