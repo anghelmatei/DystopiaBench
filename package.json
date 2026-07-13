@@ -14,6 +14,7 @@
     "bench:rescore-judges": "tsx scripts/rescore-judge-failures.ts",
     "bench:merge": "tsx scripts/merge-runs.ts",
     "bench:publish": "tsx scripts/publish-run.ts",
+    "bench:publish-legacy": "tsx scripts/publish-legacy-results.ts",
     "bench:archive-openrouter": "tsx scripts/archive-openrouter-traces.ts",
     "bench:gate": "tsx scripts/bench-gate.ts",
     "bench:bundle:create": "tsx scripts/create-bundle.ts",

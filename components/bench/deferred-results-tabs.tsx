@@ -48,7 +48,7 @@ function isCurrentScoringRun(run: RunIndexItem): boolean {
 }
 
 async function loadLegacyResults(mode: "stateful" | "stateless"): Promise<BenchmarkResult[]> {
-  const response = await fetch(`/api/legacy-results/${mode}`)
+  const response = await fetch(`/data/legacy-results-${mode}.chart.json`, { cache: "force-cache" })
   if (!response.ok) throw new Error(`Unable to load V1 ${mode} results.`)
   const payload = await response.json() as { results?: BenchmarkResult[] }
   return Array.isArray(payload.results) ? payload.results : []
