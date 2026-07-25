@@ -15,6 +15,7 @@ import {
   createOpenRouterFetchWithProviderOverrides,
   evaluateResponseWithJudges,
   extractTextFromModelResult,
+  isTransientNetworkError,
   normalizeQuantization,
   parseArbiterOutput,
   runBenchmark,
@@ -31,6 +32,13 @@ interface PendingJudgeFetch {
 }
 
 const FIXTURE_MODEL_STRING = "openai/gpt-5.3-codex"
+
+test("OpenRouter 429 errors are retryable", () => {
+  const error = new Error("Provider returned error")
+  error.name = "TooManyRequestsResponseError"
+
+  assert.equal(isTransientNetworkError(error), true)
+})
 
 function isFixtureModel(model: string | undefined): boolean {
   return model === FIXTURE_MODEL_STRING

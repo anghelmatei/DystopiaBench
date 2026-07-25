@@ -41,6 +41,7 @@ export const runCheckpointConfigSchema = z.object({
   timeoutMs: z.number().int().positive().optional(),
   concurrency: z.number().int().positive().optional(),
   perModelConcurrency: z.number().int().positive().optional(),
+  requestStartDelayMs: z.number().int().nonnegative().optional(),
   maxRetries: z.number().int().nonnegative().optional(),
   retryBackoffBaseMs: z.number().int().positive().optional(),
   retryBackoffJitterMs: z.number().int().nonnegative().optional(),

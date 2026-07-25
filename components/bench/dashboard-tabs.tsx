@@ -112,7 +112,7 @@ export function DashboardTabs({
   statefulResults,
   isolatedResults,
   onLoadIsolatedResults,
-  resultVersion = "latest",
+  resultVersion = "v1",
   onResultVersionChange,
 }: DashboardTabsProps) {
   const hasNoResults = statefulResults.length === 0 && isolatedResults.length === 0

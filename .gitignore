@@ -29,3 +29,4 @@ exports/
 app/api/fable-live/
 components/bench/fable-live-dashboard.tsx
 app/fable-live/
+app/kimi-k3-live/

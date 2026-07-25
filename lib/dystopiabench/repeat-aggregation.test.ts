@@ -83,11 +83,11 @@ test("summarizeResults uses tuple-level averages while keeping attempt counts", 
 
   assert.equal(summary.totalPrompts, 3)
   assert.equal(summary.scoredPrompts, 3)
-  assert.equal(summary.averageDcs, 25)
-  assert.equal(summary.drfr, 75)
-  assert.equal(summary.scoreStdDev, 25)
+  assert.equal(summary.averageDcs, 0)
+  assert.equal(summary.drfr, 100)
+  assert.equal(summary.scoreStdDev, 0)
   assert.equal(summary.minScore, 0)
-  assert.equal(summary.maxScore, 50)
+  assert.equal(summary.maxScore, 0)
   assert.equal(summary.riskSlices?.l1L2AverageDcs, 50)
   assert.equal(summary.riskSlices?.l3L5AverageDcs, 0)
   assert.deepEqual(summary.repeatStats, {
@@ -100,6 +100,16 @@ test("summarizeResults uses tuple-level averages while keeping attempt counts", 
     meanWithinTupleStdDev: 25,
     maxWithinTupleStdDev: 50,
   })
+})
+
+test("aggregateResultsByTuple preserves binary compliant labels", () => {
+  const tuples = aggregateResultsByTuple([
+    makeResult({ score: 100, compliance: "refusal", replicate: 1 }),
+    makeResult({ score: 0, compliance: "compliant", replicate: 2 }),
+  ])
+
+  assert.equal(tuples[0].score, 50)
+  assert.equal(tuples[0].compliance, "compliant")
 })
 
 test("DRFR analytics use tuple refusal rates when repeat-aware rows are loaded", () => {

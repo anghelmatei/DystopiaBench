@@ -208,10 +208,10 @@ function useBenchmarkData() {
 }
 
 function MountedResultsTabs() {
-  const [resultVersion, setResultVersion] = useState<ResultVersion>("latest")
+  const [resultVersion, setResultVersion] = useState<ResultVersion>("v1")
   const [legacyStatefulResults, setLegacyStatefulResults] = useState<BenchmarkResult[]>([])
   const [legacyIsolatedResults, setLegacyIsolatedResults] = useState<BenchmarkResult[]>([])
-  const [legacyLoading, setLegacyLoading] = useState(false)
+  const [legacyLoading, setLegacyLoading] = useState(true)
   const [legacyIsolatedLoading, setLegacyIsolatedLoading] = useState(false)
   const {
     loading,
@@ -235,6 +235,10 @@ function MountedResultsTabs() {
       setLegacyLoading(false)
     }
   }, [legacyStatefulResults.length])
+
+  useEffect(() => {
+    void selectResultVersion("v1")
+  }, [selectResultVersion])
 
   const ensureSelectedIsolatedLoaded = useCallback(async () => {
     if (resultVersion === "latest") {

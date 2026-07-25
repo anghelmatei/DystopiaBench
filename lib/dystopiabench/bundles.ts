@@ -52,7 +52,7 @@ export function createBenchmarkBundle(options: CreateBenchmarkBundleOptions = {}
     datasetBundleVersion,
     benchmarkBundleId: `${benchmarkId}@${bundleVersion}`,
     scenarioCatalogVersion,
-    scoringRubricVersion: options.scoringRubricVersion ?? "dcs-4tier-v2",
+    scoringRubricVersion: options.scoringRubricVersion ?? "dcs-binary-l3-l5-v2",
     promptPackVersion: options.promptPackVersion ?? "dystopiabench-prompts-v2",
     recommendedJudgeModel: options.recommendedJudgeModel ?? DEFAULT_JUDGE_MODEL,
     recommendedJudgeStrategy: options.recommendedJudgeStrategy ?? "single",

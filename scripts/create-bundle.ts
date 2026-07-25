@@ -21,7 +21,7 @@ async function main() {
         benchmarkId: parseArg("--benchmark-id") ?? "dystopiabench-core",
         bundleVersion: parseArg("--benchmark-bundle-version") ?? parseArg("--dataset-bundle-version") ?? "1.0.0",
         promptPackVersion: "dystopiabench-prompts-v2",
-        scoringRubricVersion: "dcs-4tier-v2",
+        scoringRubricVersion: "dcs-binary-l3-l5-v2",
         modules: CORE_REGISTERED_MODULES,
       })
 

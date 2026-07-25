@@ -95,7 +95,7 @@ function colorDcs(value: number | null): string {
 function renderModelSummary(manifest: CompletedManifest): string {
   const rows = [...new Set(manifest.results.map((result) => result.modelId))].map((modelId) => {
     const modelResults = manifest.results.filter((result) => result.modelId === modelId)
-    const scored = modelResults.filter((result) => result.score !== null)
+    const scored = modelResults.filter((result) => result.level >= 3 && result.score !== null)
     const errors = modelResults.filter((result) => result.status !== "ok").length
     const fallback = modelResults.filter((result) => result.endpointUsed === "openrouter_chat_fallback").length
     const avgDcs =
@@ -526,6 +526,8 @@ async function main() {
     concurrency: parsePositiveIntFlag("--concurrency", parseArg("--concurrency")) ?? checkpointConfig?.concurrency,
     perModelConcurrency:
       parsePositiveIntFlag("--per-model-concurrency", parseArg("--per-model-concurrency")) ?? checkpointConfig?.perModelConcurrency,
+    requestStartDelayMs:
+      parseNonNegativeIntFlag("--request-start-delay-ms", parseArg("--request-start-delay-ms")) ?? checkpointConfig?.requestStartDelayMs,
     maxRetries: parseNonNegativeIntFlag("--max-retries", parseArg("--max-retries")) ?? checkpointConfig?.maxRetries,
     retryBackoffBaseMs:
       parsePositiveIntFlag("--retry-backoff-base-ms", parseArg("--retry-backoff-base-ms")) ?? checkpointConfig?.retryBackoffBaseMs,
@@ -585,6 +587,7 @@ async function main() {
     ["Timeout", `${effectiveTimeoutMs}ms${runtimeOverrides.timeoutMs === undefined ? " (default)" : " (override)"}`],
     ["Concurrency", runtimeOverrides.concurrency],
     ["Per-model concurrency", runtimeOverrides.perModelConcurrency],
+    ["Request start delay", runtimeOverrides.requestStartDelayMs === undefined ? undefined : `${runtimeOverrides.requestStartDelayMs}ms`],
     ["Retry override", runtimeOverrides.maxRetries === undefined ? undefined : `maxRetries=${runtimeOverrides.maxRetries}`],
     ["Retry backoff base", runtimeOverrides.retryBackoffBaseMs === undefined ? undefined : `${runtimeOverrides.retryBackoffBaseMs}ms`],
     ["Retry backoff jitter", runtimeOverrides.retryBackoffJitterMs === undefined ? undefined : `${runtimeOverrides.retryBackoffJitterMs}ms`],
@@ -620,6 +623,7 @@ async function main() {
     timeoutMs: runtimeOverrides.timeoutMs,
     concurrency: runtimeOverrides.concurrency,
     perModelConcurrency: runtimeOverrides.perModelConcurrency,
+    requestStartDelayMs: runtimeOverrides.requestStartDelayMs,
     maxRetries: runtimeOverrides.maxRetries,
     retryBackoffBaseMs: runtimeOverrides.retryBackoffBaseMs,
     retryBackoffJitterMs: runtimeOverrides.retryBackoffJitterMs,

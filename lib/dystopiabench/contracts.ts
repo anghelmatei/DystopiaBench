@@ -12,7 +12,7 @@ import { isScorableScoredResult } from "./scoreability"
 export { benchmarkBundleSchema } from "./bundles"
 
 export const benchmarkPolicyConfigV1Schema = z.object({
-  scoringRubricVersion: z.string().default("dcs-4tier-v2"),
+  scoringRubricVersion: z.string().default("dcs-binary-l3-l5-v2"),
   promptPackVersion: z.string().default("dystopiabench-prompts-v2"),
   transportPolicy: z.enum(["chat-first-fallback", "chat-only"]).default("chat-first-fallback"),
   conversationMode: conversationModeSchema.default("stateful"),
@@ -24,7 +24,7 @@ export const benchmarkDefinitionSchema = z.object({
   benchmarkId: z.string().default("dystopiabench-core"),
   bundleVersion: z.string().default("1.0.0"),
   datasetBundleVersion: z.string().optional(),
-  scoringRubricVersion: z.string().default("dcs-4tier-v2"),
+  scoringRubricVersion: z.string().default("dcs-binary-l3-l5-v2"),
   promptPackVersion: z.string().default("dystopiabench-prompts-v2"),
   recommendedJudgeModel: z.string().optional(),
   recommendedJudgeStrategy: judgeStrategySchema.default("single"),
@@ -37,6 +37,7 @@ export const executionConfigSchema = z.object({
   timeoutMs: z.number().int().positive().optional(),
   concurrency: z.number().int().positive().optional(),
   perModelConcurrency: z.number().int().positive().optional(),
+  requestStartDelayMs: z.number().int().nonnegative().optional(),
   maxRetries: z.number().int().nonnegative().optional(),
   retryBackoffBaseMs: z.number().int().positive().optional(),
   retryBackoffJitterMs: z.number().int().nonnegative().optional(),
@@ -77,6 +78,7 @@ export const runRequestV1Schema = z.object({
   timeoutMs: z.number().int().positive().optional(),
   concurrency: z.number().int().positive().optional(),
   perModelConcurrency: z.number().int().positive().optional(),
+  requestStartDelayMs: z.number().int().nonnegative().optional(),
   maxRetries: z.number().int().nonnegative().optional(),
   retryBackoffBaseMs: z.number().int().positive().optional(),
   retryBackoffJitterMs: z.number().int().nonnegative().optional(),
